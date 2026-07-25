@@ -1,0 +1,223 @@
+'use strict';
+
+const { app, BrowserWindow, ipcMain, Menu, shell, dialog } = require('electron');
+const path = require('node:path');
+const fs = require('node:fs');
+
+const MAVLink = require('./mavlink');
+const TelemetryStore = require('./telemetry-store');
+const SerialLink = require('./serial-link');
+const MockLink = require('./mock-link');
+const TileFetcher = require('./tile-fetcher');
+
+const isMock = process.argv.includes('--mock');
+const isDev = process.argv.includes('--enable-logging');
+
+let mainWindow = null;
+let link = null;
+const telemetry = new TelemetryStore();
+const mavlink = new MAVLink({ onMessage: (msg) => telemetry.apply(msg) });
+
+function createWindow() {
+  const win = new BrowserWindow({
+    width: 1440,
+    height: 900,
+    minWidth: 1280,
+    minHeight: 800,
+    backgroundColor: '#020617',
+    show: false,
+    autoHideMenuBar: true,
+    title: 'UIU Aerial Robotics GCP - ArduPilot Ground Station',
+    webPreferences: {
+      preload: path.join(__dirname, '..', 'preload', 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false,
+      spellcheck: false,
+    },
+  });
+
+  win.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
+
+  win.once('ready-to-show', () => win.show());
+
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    shell.openExternal(url);
+    return { action: 'deny' };
+  });
+
+  // forward decoded telemetry to renderer
+  telemetry.on('update', (snapshot) => {
+    if (!win.isDestroyed()) {
+      win.webContents.send('telemetry:update', snapshot);
+    }
+  });
+
+  telemetry.on('raw', (msg) => {
+    if (!win.isDestroyed() && win.webContents) {
+      win.webContents.send('mavlink:raw', msg);
+    }
+  });
+
+  // expose the win so link-level events (mission/adsb) can forward to it
+  mainWindow = win;
+  return win;
+}
+
+function setMenu() {
+  const template = [
+    {
+      label: 'File',
+      submenu: [
+        { role: 'reload' },
+        { type: 'separator' },
+        {
+          label: 'Open Log Folder',
+          click: () => shell.openPath(app.getPath('userData')),
+        },
+        { type: 'separator' },
+        { role: 'quit' },
+      ],
+    },
+    {
+      label: 'View',
+      submenu: [
+        { role: 'toggleDevTools' },
+        { type: 'separator' },
+        { role: 'resetZoom' },
+        { role: 'zoomIn' },
+        { role: 'zoomOut' },
+      ],
+    },
+  ];
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
+
+async function init() {
+  setMenu();
+  mainWindow = createWindow();
+  await app.whenReady();
+}
+
+// ---------- IPC handlers ----------
+
+ipcMain.handle('link:list', async () => {
+  if (isMock) {
+    return {
+      ok: true,
+      ports: [{ path: 'MOCK', friendlyName: 'MOCK — simulated MAVLink stream', manufacturer: 'UIU Aerial Robotics GCP' }],
+      error: null,
+    };
+  }
+  const result = await SerialLink.list();
+  console.log('[link:list] ok=' + result.ok + ' ports=' + (result.ports ? result.ports.length : 0) + (result.error ? ' error=' + result.error : ''));
+  // Always offer MOCK so the user can demo even without hardware.
+  return {
+    ok: result.ok,
+    ports: [
+      ...(result.ports || []),
+      { path: 'MOCK', friendlyName: 'MOCK — simulated MAVLink stream', manufacturer: 'UIU Aerial Robotics GCP' },
+    ],
+    error: result.error,
+  };
+});
+
+ipcMain.handle('link:connect', async (_evt, options) => {
+  if (link) {
+    await link.close().catch(() => {});
+    link = null;
+  }
+  const opts = options || {};
+  if (isMock || opts.path === 'MOCK') {
+    link = new MockLink();
+  } else {
+    link = new SerialLink();
+  }
+  link.on('data', (chunk) => mavlink.parse(chunk));
+  link.on('status', (s) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('link:status', s);
+    }
+  });
+  link.on('mission', (wp) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('mission:update', wp);
+    }
+  });
+  link.on('adsb', (list) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('adsb:update', list);
+    }
+  });
+  await link.open(opts);
+  telemetry.reset();
+  return { ok: true, path: opts.path || 'MOCK' };
+});
+
+ipcMain.handle('link:disconnect', async () => {
+  if (!link) return { ok: true };
+  await link.close().catch(() => {});
+  link = null;
+  telemetry.reset();
+  return { ok: true };
+});
+
+ipcMain.handle('link:status', async () => ({
+  connected: !!link && link.isOpen(),
+  path: link ? link.path() : null,
+  baud: link ? link.baud() : null,
+}));
+
+ipcMain.handle('link:write', async (_evt, bytes) => {
+  if (!link || !link.isOpen()) return { ok: false, error: 'not connected' };
+  await link.write(bytes);
+  return { ok: true };
+});
+
+ipcMain.handle('map:getTiles', async (_evt, urls) => {
+  try {
+    const tiles = await TileFetcher.fetchTiles(urls || []);
+    return tiles;
+  } catch (err) {
+    return [];
+  }
+});
+
+// Log to file
+ipcMain.handle('log:save', async (_evt, name, payload) => {
+  try {
+    const dir = app.getPath('userData');
+    fs.mkdirSync(dir, { recursive: true });
+    const safe = (name || 'session').replace(/[^a-z0-9_-]/gi, '_');
+    const file = path.join(dir, `${safe}-${Date.now()}.json`);
+    fs.writeFileSync(file, JSON.stringify(payload, null, 2));
+    return { ok: true, file };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('app:info', async () => ({
+  name: app.getName(),
+  version: app.getVersion(),
+  electron: process.versions.electron,
+  node: process.versions.node,
+  chrome: process.versions.chrome,
+  userData: app.getPath('userData'),
+  mock: isMock,
+}));
+
+app.whenReady().then(init).catch((err) => {
+  console.error('init failed', err);
+  dialog.showErrorBox('Startup error', err.message);
+  app.exit(1);
+});
+
+app.on('window-all-closed', async () => {
+  if (link) await link.close().catch(() => {});
+  if (process.platform !== 'darwin') app.quit();
+});
+
+app.on('activate', () => {
+  if (BrowserWindow.getAllWindows().length === 0) mainWindow = createWindow();
+});

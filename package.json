@@ -1,0 +1,23 @@
+{
+  "name": "uiu-aerial-robotics-gcp",
+  "version": "0.1.0",
+  "description": "UIU Aerial Robotics GCP - Custom Electron Ground Control Station for ArduPilot over long-range radio modem (USB/serial).",
+  "main": "src/main/main.js",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --enable-logging",
+    "mock": "electron . --mock",
+    "postinstall": "electron-rebuild -f -w serialport"
+  },
+  "author": "Arpon",
+  "license": "MIT",
+  "dependencies": {
+    "serialport": "^12.0.0",
+    "electron-store": "^8.2.0"
+  },
+  "devDependencies": {
+    "electron": "^32.0.0",
+    "@electron/rebuild": "^3.7.0"
+  }
+}
