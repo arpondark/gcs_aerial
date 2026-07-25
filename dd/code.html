@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>AERO-GCS ALPHA | UIU Aerial Robotics</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-primary": "#2f3034",
+                        "inverse-on-surface": "#2d3136",
+                        "on-secondary": "#4d2600",
+                        "error-container": "#93000a",
+                        "surface-container": "#1c2025",
+                        "on-secondary-container": "#603100",
+                        "on-surface-variant": "#c6c6ca",
+                        "on-tertiary-fixed": "#001f24",
+                        "on-tertiary-container": "#008b9c",
+                        "on-surface": "#e0e2e9",
+                        "inverse-surface": "#e0e2e9",
+                        "tertiary-fixed": "#9cf0ff",
+                        "tertiary": "#00daf3",
+                        "on-error-container": "#ffdad6",
+                        "on-primary-container": "#7d7e82",
+                        "secondary-fixed": "#ffdcc3",
+                        "on-secondary-fixed-variant": "#6e3900",
+                        "error": "#ffb4ab",
+                        "outline": "#8f9094",
+                        "surface-tint": "#c6c6ca",
+                        "surface-dim": "#101418",
+                        "on-error": "#690005",
+                        "surface-container-high": "#262a2f",
+                        "primary-container": "#121417",
+                        "surface-variant": "#31353a",
+                        "surface": "#101418",
+                        "surface-container-highest": "#31353a",
+                        "primary": "#c6c6ca",
+                        "on-secondary-fixed": "#2f1500",
+                        "tertiary-container": "#00171b",
+                        "inverse-primary": "#5d5e62",
+                        "surface-container-low": "#181c21",
+                        "secondary": "#ffb77d",
+                        "secondary-container": "#fd8b00",
+                        "surface-bright": "#36393f",
+                        "outline-variant": "#45474a",
+                        "on-background": "#e0e2e9",
+                        "secondary-fixed-dim": "#ffb77d",
+                        "primary-fixed-dim": "#c6c6ca",
+                        "on-tertiary": "#00363d",
+                        "on-tertiary-fixed-variant": "#004f58",
+                        "surface-container-lowest": "#0a0f13",
+                        "on-primary-fixed": "#1a1c1f",
+                        "tertiary-fixed-dim": "#00daf3",
+                        "on-primary-fixed-variant": "#45474a",
+                        "primary-fixed": "#e2e2e6",
+                        "background": "#101418"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "sm": "8px",
+                        "panel-padding": "16px",
+                        "xs": "4px",
+                        "lg": "24px",
+                        "unit": "4px",
+                        "xl": "32px",
+                        "gutter": "12px",
+                        "md": "16px"
+                    },
+                    "fontFamily": {
+                        "body-md": ["Inter"],
+                        "display": ["Inter"],
+                        "headline-md": ["Inter"],
+                        "label-caps": ["Inter"],
+                        "mono-md": ["JetBrains Mono"],
+                        "headline-lg": ["Inter"],
+                        "mono-sm": ["JetBrains Mono"],
+                        "mono-lg": ["JetBrains Mono"],
+                        "body-lg": ["Inter"]
+                    },
+                    "fontSize": {
+                        "body-md": ["14px", {"lineHeight": "20px", "letterSpacing": "0em", "fontWeight": "400"}],
+                        "display": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                        "headline-md": ["20px", {"lineHeight": "28px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                        "label-caps": ["11px", {"lineHeight": "16px", "letterSpacing": "0.08em", "fontWeight": "700"}],
+                        "mono-md": ["14px", {"lineHeight": "20px", "letterSpacing": "0em", "fontWeight": "500"}],
+                        "headline-lg": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                        "mono-sm": ["12px", {"lineHeight": "16px", "letterSpacing": "0.02em", "fontWeight": "500"}],
+                        "mono-lg": ["16px", {"lineHeight": "24px", "letterSpacing": "0em", "fontWeight": "500"}],
+                        "body-lg": ["16px", {"lineHeight": "24px", "letterSpacing": "0em", "fontWeight": "400"}]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            display: inline-block;
+            vertical-align: middle;
+        }
+        body {
+            background-color: #0b0c0e;
+            color: #e0e2e9;
+            overflow: hidden;
+            height: 100vh;
+        }
+        .panel-border {
+            border: 1px solid #2d333b;
+        }
+        .zebra-stripe div:nth-child(even) {
+            background-color: rgba(255, 255, 255, 0.03);
+        }
+        .artificial-horizon {
+            background: linear-gradient(to bottom, #005a9c 50%, #5d4037 50%);
+            transition: transform 0.1s linear;
+        }
+        .glow-cyan { box-shadow: 0 0 8px rgba(0, 218, 243, 0.4); }
+        .glow-orange { box-shadow: 0 0 8px rgba(255, 183, 125, 0.4); }
+        .glow-green { box-shadow: 0 0 8px rgba(0, 255, 127, 0.4); }
+    </style>
+</head>
+<body class="font-body-md text-body-md select-none">
+<!-- TOP NAVBAR -->
+<header class="bg-surface-container flex justify-between items-center px-panel-padding h-12 w-full z-50 border-b border-outline-variant fixed top-0 left-0">
+<div class="flex items-center gap-md">
+<span class="font-display text-headline-lg font-bold text-secondary">AERO-GCS ALPHA</span>
+<div class="h-6 w-px bg-outline-variant mx-2"></div>
+<div class="flex gap-4 items-center">
+<div class="flex items-center gap-2">
+<span class="font-label-caps text-on-surface-variant">PORT</span>
+<select class="bg-surface-container-low border border-outline-variant text-mono-sm px-2 py-0.5 rounded focus:border-tertiary focus:ring-0 outline-none">
+<option>COM3 (TELEM)</option>
+<option>UDP:14550</option>
+<option>USB:ACM0</option>
+</select>
+</div>
+<div class="flex items-center gap-2">
+<span class="font-label-caps text-on-surface-variant">BAUD</span>
+<select class="bg-surface-container-low border border-outline-variant text-mono-sm px-2 py-0.5 rounded focus:border-tertiary focus:ring-0 outline-none">
+<option>57600</option>
+<option>115200</option>
+<option>921600</option>
+</select>
+</div>
+<button class="bg-secondary text-on-secondary px-3 py-1 font-label-caps hover:brightness-110 transition-all rounded-sm flex items-center gap-1">
+<span class="material-symbols-outlined text-sm">link</span> CONNECT
+                </button>
+</div>
+</div>
+<nav class="flex gap-6">
+<a class="text-secondary border-b-2 border-secondary pb-1 font-headline-md text-headline-md" href="#">FLIGHT</a>
+<a class="text-on-surface-variant font-headline-md text-headline-md hover:text-primary transition-colors" href="#">MISSION</a>
+<a class="text-on-surface-variant font-headline-md text-headline-md hover:text-primary transition-colors" href="#">CONFIG</a>
+<a class="text-on-surface-variant font-headline-md text-headline-md hover:text-primary transition-colors" href="#">ANALYSIS</a>
+</nav>
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined text-on-surface-variant cursor-pointer hover:text-primary">settings</span>
+<span class="material-symbols-outlined text-on-surface-variant cursor-pointer hover:text-primary">wifi_tethering</span>
+<span class="material-symbols-outlined text-error cursor-pointer hover:brightness-125">power_settings_new</span>
+</div>
+</header>
+<!-- SIDEBAR -->
+<aside class="fixed left-0 top-12 bottom-0 flex flex-col items-center py-4 z-40 bg-surface-container-low border-r border-outline-variant w-20">
+<div class="mb-8 flex flex-col items-center">
+<div class="w-10 h-10 bg-surface-variant rounded-full flex items-center justify-center mb-1">
+<span class="material-symbols-outlined text-primary">person</span>
+</div>
+<span class="font-label-caps text-[9px] text-on-surface-variant">PILOT OPS</span>
+</div>
+<div class="flex flex-col gap-4 w-full">
+<div class="flex flex-col items-center py-3 bg-secondary-container text-on-secondary-container border-l-2 border-secondary cursor-pointer">
+<span class="material-symbols-outlined mb-1">rocket_launch</span>
+<span class="font-label-caps text-[9px]">VEHICLE</span>
+</div>
+<div class="flex flex-col items-center py-3 text-on-surface-variant hover:bg-surface-variant cursor-pointer transition-all">
+<span class="material-symbols-outlined mb-1">package_2</span>
+<span class="font-label-caps text-[9px]">PAYLOAD</span>
+</div>
+<div class="flex flex-col items-center py-3 text-on-surface-variant hover:bg-surface-variant cursor-pointer transition-all">
+<span class="material-symbols-outlined mb-1">battery_charging_full</span>
+<span class="font-label-caps text-[9px]">BATTERY</span>
+</div>
+<div class="flex flex-col items-center py-3 text-on-surface-variant hover:bg-surface-variant cursor-pointer transition-all">
+<span class="material-symbols-outlined mb-1">settings_input_antenna</span>
+<span class="font-label-caps text-[9px]">RADIO</span>
+</div>
+<div class="flex flex-col items-center py-3 text-on-surface-variant hover:bg-surface-variant cursor-pointer transition-all">
+<span class="material-symbols-outlined mb-1">memory</span>
+<span class="font-label-caps text-[9px]">SYSTEM</span>
+</div>
+</div>
+<div class="mt-auto w-full px-2">
+<button class="bg-error-container text-on-error-container w-full py-2 font-label-caps text-[10px] rounded border border-error/20 hover:bg-error transition-colors">ARM SYSTEM</button>
+<div class="flex flex-col gap-4 mt-6 items-center">
+<div class="text-on-surface-variant hover:text-on-surface cursor-pointer flex flex-col items-center">
+<span class="material-symbols-outlined text-xl">terminal</span>
+<span class="font-label-caps text-[9px]">LOGS</span>
+</div>
+<div class="text-on-surface-variant hover:text-on-surface cursor-pointer flex flex-col items-center">
+<span class="material-symbols-outlined text-xl">troubleshoot</span>
+<span class="font-label-caps text-[9px]">DIAG</span>
+</div>
+</div>
+</div>
+</aside>
+<!-- MAIN CANVAS -->
+<main class="fixed top-12 left-20 right-0 bottom-8 p-gutter flex flex-col gap-gutter">
+<!-- STATUS STRIP -->
+<div class="grid grid-cols-5 gap-gutter">
+<div class="bg-surface-container-high panel-border p-3 flex flex-col border-l-4 border-l-tertiary">
+<span class="font-label-caps text-on-surface-variant text-[10px]">FLIGHT MODE</span>
+<div class="flex items-baseline gap-2">
+<span class="font-mono-lg text-mono-lg text-tertiary">LOITER</span>
+<div class="w-2 h-2 rounded-full bg-tertiary glow-cyan animate-pulse"></div>
+</div>
+</div>
+<div class="bg-surface-container-high panel-border p-3 flex flex-col border-l-4 border-l-error">
+<span class="font-label-caps text-on-surface-variant text-[10px]">ARMED STATUS</span>
+<span class="font-mono-lg text-mono-lg text-error">DISARMED</span>
+</div>
+<div class="bg-surface-container-high panel-border p-3 flex flex-col border-l-4 border-l-green-500">
+<span class="font-label-caps text-on-surface-variant text-[10px]">GPS FIX</span>
+<div class="flex items-baseline justify-between">
+<span class="font-mono-lg text-mono-lg text-on-surface">3D FIX (18)</span>
+<span class="font-mono-sm text-mono-sm text-on-surface-variant">HDOP 0.8</span>
+</div>
+</div>
+<div class="bg-surface-container-high panel-border p-3 flex flex-col border-l-4 border-l-secondary">
+<span class="font-label-caps text-on-surface-variant text-[10px]">BATTERY</span>
+<div class="flex items-baseline justify-between">
+<span class="font-mono-lg text-mono-lg text-secondary">14.8V</span>
+<span class="font-mono-sm text-mono-sm text-on-surface-variant">88%</span>
+</div>
+</div>
+<div class="bg-surface-container-high panel-border p-3 flex flex-col border-l-4 border-l-tertiary">
+<span class="font-label-caps text-on-surface-variant text-[10px]">DATALINK</span>
+<div class="flex items-baseline justify-between">
+<span class="font-mono-lg text-mono-lg text-tertiary">98.4%</span>
+<span class="font-mono-sm text-mono-sm text-on-surface-variant">-54 dBm</span>
+</div>
+</div>
+</div>
+<!-- CONTENT GRID -->
+<div class="flex-1 grid grid-cols-10 gap-gutter overflow-hidden">
+<!-- LEFT PANEL (HUD & MAP) -->
+<div class="col-span-6 flex flex-col gap-gutter">
+<!-- Artificial Horizon -->
+<div class="h-1/2 bg-surface-container-low panel-border relative overflow-hidden flex items-center justify-center">
+<div class="artificial-horizon absolute w-[200%] h-[200%] transition-transform duration-100 ease-out" id="horizon" style="transform: rotate(2deg) translateY(5px);"></div>
+<div class="absolute inset-0 bg-transparent flex items-center justify-center pointer-events-none">
+<!-- HUD Overlays -->
+<div class="w-full h-full p-4 flex flex-col justify-between text-white font-mono-md">
+<div class="flex justify-between items-start">
+<div class="bg-black/40 p-2 border border-white/20">
+<div class="text-[10px] text-white/60">AIRSPEED</div>
+<div class="text-2xl font-bold">12.4 <span class="text-xs">m/s</span></div>
+</div>
+<div class="bg-black/40 p-2 border border-white/20 text-right">
+<div class="text-[10px] text-white/60">ALTITUDE</div>
+<div class="text-2xl font-bold">45.2 <span class="text-xs">m</span></div>
+</div>
+</div>
+<!-- Pitch Ladder -->
+<div class="absolute inset-0 flex items-center justify-center">
+<svg class="w-64 h-64 overflow-visible" viewbox="0 0 100 100">
+<path d="M 30 50 L 45 50 M 55 50 L 70 50" stroke="white" stroke-width="1.5"></path>
+<path d="M 45 40 L 55 40" opacity="0.5" stroke="white" stroke-width="1"></path>
+<path d="M 45 60 L 55 60" opacity="0.5" stroke="white" stroke-width="1"></path>
+<circle cx="50" cy="50" fill="yellow" r="2"></circle>
+</svg>
+</div>
+<div class="flex justify-center mb-4">
+<div class="bg-black/40 px-4 py-1 border border-white/20 text-center">
+<div class="text-[10px] text-white/60">HEADING</div>
+<div class="text-lg font-bold">245° (WSW)</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Satellite Map -->
+<div class="h-1/2 bg-surface-container panel-border relative group overflow-hidden">
+<div class="absolute inset-0 z-0">
+<div class="w-full h-full bg-cover bg-center grayscale opacity-60" data-alt="A detailed satellite view of a technical testing facility or airfield, viewed from directly above. The map features dark, high-contrast terrain with technical data overlays like glowing cyan flight path lines, mission waypoints labeled WP1 through WP5, and a faint digital grid. The style is professional and industrial, reminiscent of high-end mission control software in a dark-mode palette." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuDfk0rqQKH5O7LmQzewTSVHJQcR-tijEWj3O5YMPoD3pgPu6JraYZl2fWuP-tnEqs8FbL25f18awr7pMCgvffGubUD0b8bBbpcDzrXulEuHahi4Yf_u9JZCQCO1RkIOcM9CsUwYebnNCRkrlvPIsM-1YEs4pH4mU_xUiQRLlnQGsNwmQdrNkU41hc46k7la1OFbUZMJ_CqLHhxg_9IZ8_Wi7TiT_y1o-XUJbagavQEEwYzB1yyccF8U3486gJC9zqjMWmWSB0kidROC')"></div>
+</div>
+<div class="absolute top-4 right-4 z-10 flex flex-col gap-2">
+<button class="bg-surface-container-highest p-2 rounded panel-border hover:bg-surface-variant transition-colors"><span class="material-symbols-outlined">add</span></button>
+<button class="bg-surface-container-highest p-2 rounded panel-border hover:bg-surface-variant transition-colors"><span class="material-symbols-outlined">remove</span></button>
+<button class="bg-surface-container-highest p-2 rounded panel-border hover:bg-surface-variant transition-colors"><span class="material-symbols-outlined">layers</span></button>
+</div>
+<div class="absolute bottom-4 left-4 z-10 bg-black/60 p-2 text-mono-sm border border-outline-variant">
+                        45°23'11"N 75°41'52"W | ZOOM 18x
+                    </div>
+</div>
+</div>
+<!-- RIGHT PANEL (SUB-PANELS) -->
+<div class="col-span-4 flex flex-col gap-gutter overflow-y-auto pr-1">
+<!-- Battery Detail -->
+<div class="bg-surface-container-high panel-border">
+<div class="bg-surface-container-highest px-3 py-1 border-b border-outline-variant flex justify-between items-center">
+<span class="font-label-caps">BATTERY ANALYTICS</span>
+<span class="material-symbols-outlined text-sm">battery_charging_full</span>
+</div>
+<div class="p-3 grid grid-cols-2 gap-4">
+<div>
+<div class="text-[10px] text-on-surface-variant mb-1">TOTAL VOLTAGE</div>
+<div class="font-mono-lg text-on-surface">14.82V</div>
+<div class="w-full bg-surface-container-low h-1 mt-2">
+<div class="bg-secondary h-full glow-orange" style="width: 82%"></div>
+</div>
+</div>
+<div>
+<div class="text-[10px] text-on-surface-variant mb-1">CURRENT DRAW</div>
+<div class="font-mono-lg text-on-surface">12.4A</div>
+</div>
+<div class="col-span-2 zebra-stripe text-mono-sm">
+<div class="flex justify-between py-1 px-2"><span>CELL 1</span><span class="text-tertiary">3.71V</span></div>
+<div class="flex justify-between py-1 px-2"><span>CELL 2</span><span class="text-tertiary">3.70V</span></div>
+<div class="flex justify-between py-1 px-2"><span>CELL 3</span><span class="text-tertiary">3.71V</span></div>
+<div class="flex justify-between py-1 px-2"><span>CELL 4</span><span class="text-tertiary">3.70V</span></div>
+</div>
+</div>
+</div>
+<!-- Radio Link -->
+<div class="bg-surface-container-high panel-border">
+<div class="bg-surface-container-highest px-3 py-1 border-b border-outline-variant flex justify-between items-center">
+<span class="font-label-caps">SIGNAL INTELLIGENCE</span>
+<span class="material-symbols-outlined text-sm">sensors</span>
+</div>
+<div class="p-3">
+<div class="flex items-center gap-4 mb-4">
+<div class="flex-1">
+<div class="text-[10px] text-on-surface-variant">RSSI</div>
+<div class="font-mono-lg">-54 dBm</div>
+</div>
+<div class="flex-1">
+<div class="text-[10px] text-on-surface-variant">NOISE</div>
+<div class="font-mono-lg">-92 dBm</div>
+</div>
+</div>
+<div class="space-y-2">
+<div class="flex justify-between text-mono-sm items-center">
+<span>PACKET LOSS</span>
+<span class="text-green-500">0.02%</span>
+</div>
+<div class="w-full bg-surface-container-low h-1">
+<div class="bg-tertiary h-full" style="width: 1%"></div>
+</div>
+</div>
+</div>
+</div>
+<!-- IMU Data -->
+<div class="bg-surface-container-high panel-border">
+<div class="bg-surface-container-highest px-3 py-1 border-b border-outline-variant flex justify-between items-center">
+<span class="font-label-caps">INERTIAL SENSORS</span>
+<span class="material-symbols-outlined text-sm">balance</span>
+</div>
+<div class="p-3 grid grid-cols-3 gap-2">
+<div class="bg-surface-container-low p-2">
+<div class="text-[9px] text-on-surface-variant">ACCEL X</div>
+<div class="font-mono-md">0.01g</div>
+</div>
+<div class="bg-surface-container-low p-2">
+<div class="text-[9px] text-on-surface-variant">ACCEL Y</div>
+<div class="font-mono-md">-0.02g</div>
+</div>
+<div class="bg-surface-container-low p-2">
+<div class="text-[9px] text-on-surface-variant">ACCEL Z</div>
+<div class="font-mono-md">1.00g</div>
+</div>
+<div class="bg-surface-container-low p-2">
+<div class="text-[9px] text-on-surface-variant">GYRO P</div>
+<div class="font-mono-md">0.12°/s</div>
+</div>
+<div class="bg-surface-container-low p-2">
+<div class="text-[9px] text-on-surface-variant">GYRO R</div>
+<div class="font-mono-md">-0.04°/s</div>
+</div>
+<div class="bg-surface-container-low p-2">
+<div class="text-[9px] text-on-surface-variant">GYRO Y</div>
+<div class="font-mono-md">0.00°/s</div>
+</div>
+</div>
+</div>
+<!-- Mission Progress -->
+<div class="bg-surface-container-high panel-border">
+<div class="bg-surface-container-highest px-3 py-1 border-b border-outline-variant flex justify-between items-center">
+<span class="font-label-caps">MISSION PROGRESS</span>
+<span class="material-symbols-outlined text-sm">flag</span>
+</div>
+<div class="p-3 space-y-4">
+<div class="flex justify-between items-end">
+<div>
+<div class="text-[10px] text-on-surface-variant">CURRENT WP</div>
+<div class="font-mono-lg">#03 / 12</div>
+</div>
+<div class="text-right">
+<div class="text-[10px] text-on-surface-variant">DISTANCE</div>
+<div class="font-mono-lg">248m</div>
+</div>
+</div>
+<div class="flex justify-between items-end">
+<div>
+<div class="text-[10px] text-on-surface-variant">ETA NEXT</div>
+<div class="font-mono-lg">00:42</div>
+</div>
+<div class="text-right">
+<div class="text-[10px] text-on-surface-variant">TOTAL TIME</div>
+<div class="font-mono-lg">12:05</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- FOOTER / LOG STREAM -->
+<footer class="fixed bottom-0 left-20 right-0 h-8 flex justify-between items-center px-4 z-50 bg-surface-container-lowest border-t border-outline-variant font-mono-sm text-mono-sm">
+<div class="flex items-center gap-4 flex-1 overflow-hidden">
+<span class="text-tertiary shrink-0">LOG:</span>
+<div class="text-on-surface-variant whitespace-nowrap overflow-hidden" id="log-stream">
+<span class="text-secondary">[14:23:45]</span> Pre-arm check: GPS Fix 3D ... <span class="text-secondary">[14:23:48]</span> EKF3 IMU0 active ... <span class="text-secondary">[14:24:01]</span> Telemetry link nominal (98%) ... 
+            </div>
+</div>
+<div class="flex items-center gap-4 pl-4 bg-surface-container-lowest border-l border-outline-variant shrink-0">
+<div class="flex items-center gap-1">
+<span class="w-2 h-2 rounded-full bg-green-500"></span>
+<span class="text-on-surface-variant uppercase">SENSORS</span>
+</div>
+<div class="flex items-center gap-1">
+<span class="w-2 h-2 rounded-full bg-green-500"></span>
+<span class="text-on-surface-variant uppercase">LINK</span>
+</div>
+<div class="flex items-center gap-1">
+<span class="w-2 h-2 rounded-full bg-secondary animate-pulse"></span>
+<span class="text-on-surface-variant uppercase">TRAFFIC</span>
+</div>
+<div class="flex items-center gap-1">
+<span class="w-2 h-2 rounded-full bg-green-500"></span>
+<span class="text-on-surface-variant uppercase">RECOVERY</span>
+</div>
+<span class="text-on-surface-variant/40 ml-2">V4.2 ALPHA</span>
+</div>
+</footer>
+<script>
+        // Simulate micro-interactions
+        document.addEventListener('mousemove', (e) => {
+            const horizon = document.getElementById('horizon');
+            const x = (e.clientX / window.innerWidth - 0.5) * 10;
+            const y = (e.clientY / window.innerHeight - 0.5) * 20;
+            horizon.style.transform = `rotate(${x}deg) translateY(${y}px)`;
+        });
+
+        // Simple log ticker
+        const logStream = document.getElementById('log-stream');
+        const messages = [
+            "RC Signal Strength: -55dBm",
+            "Battery Temp: 32.4C",
+            "Vibration Level: Low",
+            "Mavlink Heartbeat: Normal",
+            "Terrain Following: Enabled",
+            "Compass Heading Valid"
+        ];
+        setInterval(() => {
+            const time = new Date().toLocaleTimeString([], { hour12: false });
+            const msg = messages[Math.floor(Math.random() * messages.length)];
+            const newLog = document.createElement('span');
+            newLog.className = 'ml-4 opacity-0 transition-opacity duration-500';
+            newLog.innerHTML = `<span class="text-secondary">[${time}]</span> ${msg}`;
+            logStream.appendChild(newLog);
+            setTimeout(() => newLog.classList.remove('opacity-0'), 100);
+            if(logStream.childNodes.length > 5) logStream.removeChild(logStream.firstChild);
+        }, 3000);
+    </script>
+</body></html>

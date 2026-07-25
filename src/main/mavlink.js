@@ -141,15 +141,36 @@ class MAVLink {
       offset = 10;
     }
 
+    // Sanity check: payload length must be reasonable (max 255 bytes per MAVLink spec).
+    // If we see a huge value, this is a false sync — drop one byte and try again.
+    if (payloadLen > 255) {
+      this._buffer = this._buffer.slice(1);
+      // Recurse to re-sync
+      return this._consumePacket();
+    }
+
     const total = headerLen + payloadLen + 2; // + CRC
     if (this._buffer.length < total) return null;
 
     const payload = this._buffer.slice(offset, offset + payloadLen);
     const payloadCrc = this._buffer.slice(offset + payloadLen, total);
 
+    // Consume the packet from the buffer BEFORE decoding, so a decode failure
+    // doesn't leave the packet sitting in the buffer for endless retries.
     this._buffer = this._buffer.slice(total);
 
-    const decoded = this._decode(msgId, payload);
+    let decoded;
+    try {
+      decoded = this._decode(msgId, payload);
+    } catch (err) {
+      // Decoder threw — almost certainly a false sync (payload contained 0xfe/0xfd).
+      // The byte at startIdx was probably a data byte, not a magic byte.
+      // Since we already consumed the (suspect) total bytes, the next sync will
+      // search from the current buffer head for the next magic byte.
+      console.warn(`[mavlink] decode failed for msgId=${msgId} len=${payloadLen}: ${err.message}`);
+      return null;
+    }
+
     return {
       magic, seq, sysId, compId, msgId,
       incompatFlags, compatFlags,
@@ -164,27 +185,33 @@ class MAVLink {
   }
 
   _decode(msgId, p) {
-    switch (msgId) {
-      case 0: return this._heartbeat(p);
-      case 1: return this._sysStatus(p);
-      case 24: return this._gpsRaw(p);
-      case 27: return this._rawImu(p);
-      case 28: return { seq: p.readUInt16LE(0) };
-      case 29: return this._scaledPressure(p);
-      case 30: return this._attitude(p);
-      case 33: return this._globalPosition(p);
-      case 36: return { seq: p.readUInt16LE(0) };
-      case 42: return { seq: p.readUInt16LE(0), total: null };
-      case 65: return this._rcChannels(p);
-      case 74: return this._vfrHud(p);
-      case 109: return this._radio(p);
-      case 147: return this._battery(p);
-      case 242: return this._home(p);
-      default: return { raw: p };
+    try {
+      switch (msgId) {
+        case 0: return this._heartbeat(p);
+        case 1: return this._sysStatus(p);
+        case 24: return this._gpsRaw(p);
+        case 27: return this._rawImu(p);
+        case 28: return { seq: p.readUInt16LE(0) };
+        case 29: return this._scaledPressure(p);
+        case 30: return this._attitude(p);
+        case 33: return this._globalPosition(p);
+        case 36: return { seq: p.readUInt16LE(0) };
+        case 42: return { seq: p.readUInt16LE(0), total: null };
+        case 65: return this._rcChannels(p);
+        case 74: return this._vfrHud(p);
+        case 109: return this._radio(p);
+        case 147: return this._battery(p);
+        case 242: return this._home(p);
+        default: return { raw: p };
+      }
+    } catch (err) {
+      // Decoder failed (e.g. payload shorter than expected — false sync).
+      throw new Error(`decode msgId=${msgId} (payloadLen=${p.length}): ${err.message}`);
     }
   }
 
   _heartbeat(p) {
+    if (p.length < 9) throw new Error('heartbeat payload too short');
     return {
       custom_mode: p.readUInt32LE(0),
       type: MAV_TYPES[p[4]] || `TYPE_${p[4]}`,
@@ -198,6 +225,7 @@ class MAVLink {
   }
 
   _sysStatus(p) {
+    if (p.length < 31) throw new Error('sys_status payload too short');
     return {
       load: p.readUInt16LE(12) / 10,
       voltage_v: p.readUInt16LE(14) / 1000,
@@ -213,6 +241,7 @@ class MAVLink {
   }
 
   _gpsRaw(p) {
+    if (p.length < 30) throw new Error('gps_raw payload too short');
     return {
       fix: FIX[p[8]] || 'UNKNOWN',
       sats: p[29],
@@ -227,6 +256,7 @@ class MAVLink {
   }
 
   _rawImu(p) {
+    if (p.length < 18) throw new Error('raw_imu payload too short');
     return {
       accel: [p.readInt16LE(0) / 1000, p.readInt16LE(2) / 1000, p.readInt16LE(4) / 1000],
       gyro: [p.readInt16LE(6) / 1000, p.readInt16LE(8) / 1000, p.readInt16LE(10) / 1000],
@@ -235,6 +265,7 @@ class MAVLink {
   }
 
   _scaledPressure(p) {
+    if (p.length < 14) throw new Error('scaled_pressure payload too short');
     return {
       pressure_hpa: p.readFloatLE(4),
       diff_pressure: p.readFloatLE(8),
@@ -243,6 +274,7 @@ class MAVLink {
   }
 
   _attitude(p) {
+    if (p.length < 28) throw new Error('attitude payload too short');
     return {
       roll_deg: this._radToDeg(p.readFloatLE(4)),
       pitch_deg: this._radToDeg(p.readFloatLE(8)),
@@ -254,6 +286,7 @@ class MAVLink {
   }
 
   _globalPosition(p) {
+    if (p.length < 28) throw new Error('global_position payload too short');
     return {
       lat: p.readInt32LE(4) / 1e7,
       lon: p.readInt32LE(8) / 1e7,
@@ -267,6 +300,7 @@ class MAVLink {
   }
 
   _rcChannels(p) {
+    if (p.length < 21) throw new Error('rc_channels payload too short');
     return {
       chan1: p.readUInt16LE(0),
       chan2: p.readUInt16LE(2),
@@ -281,6 +315,7 @@ class MAVLink {
   }
 
   _vfrHud(p) {
+    if (p.length < 20) throw new Error('vfr_hud payload too short');
     return {
       airspeed_m_s: p.readFloatLE(0),
       groundspeed_m_s: p.readFloatLE(4),
@@ -292,6 +327,7 @@ class MAVLink {
   }
 
   _radio(p) {
+    if (p.length < 8) throw new Error('radio payload too short');
     return {
       rssi: p[0],
       remrssi: p[1],
@@ -304,6 +340,7 @@ class MAVLink {
   }
 
   _battery(p) {
+    if (p.length < 41) throw new Error('battery payload too short');
     return {
       current: p.readInt16LE(0) / 100,
       consumed_mah: p.readUInt16LE(2),
@@ -314,6 +351,7 @@ class MAVLink {
   }
 
   _home(p) {
+    if (p.length < 12) throw new Error('home payload too short');
     return {
       lat: p.readInt32LE(0) / 1e7,
       lon: p.readInt32LE(4) / 1e7,

@@ -3,37 +3,32 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=1280, initial-scale=1" />
-    <title>UIU Aerial Robotics GCP - ArduPilot Ground Station</title>
+    <title>AERO-GCS ALPHA — UIU Aerial Robotics</title>
     <link rel="stylesheet" href="styles/app.css" />
   </head>
   <body>
     <header class="topbar">
       <div class="brand">
-        <span class="brand-mark" aria-hidden="true">U</span>
-        <div>
-          <div class="brand-title">UIU Aerial Robotics</div>
-          <div class="brand-sub">Ground Control · RFD900x</div>
+        <span class="brand-title">AERO-GCS ALPHA</span>
+        <div class="brand-divider"></div>
+        <div class="connection">
+          <label class="ctrl">Port
+            <select id="port-select" aria-label="Serial port"></select>
+          </label>
+          <label class="ctrl">Baud
+            <select id="baud-select" aria-label="Baud rate">
+              <option>57600</option>
+              <option>9600</option>
+              <option>38400</option>
+              <option>115200</option>
+              <option>230400</option>
+            </select>
+          </label>
+          <button class="btn btn-secondary" id="refresh-ports">Rescan</button>
+          <button class="btn btn-primary" id="connect-btn">Connect</button>
+          <button class="btn btn-ghost" id="disconnect-btn" disabled>Disconnect</button>
         </div>
       </div>
-
-      <div class="connection">
-        <label class="ctrl">Port
-          <select id="port-select" aria-label="Serial port"></select>
-        </label>
-        <label class="ctrl">Baud
-          <select id="baud-select" aria-label="Baud rate">
-            <option>57600</option>
-            <option>9600</option>
-            <option>38400</option>
-            <option>115200</option>
-            <option>230400</option>
-          </select>
-        </label>
-        <button class="btn btn-secondary" id="refresh-ports">Rescan</button>
-        <button class="btn btn-primary" id="connect-btn">Connect</button>
-        <button class="btn btn-ghost" id="disconnect-btn" disabled>Disconnect</button>
-      </div>
-
       <div class="conn-pill" id="conn-pill" data-state="offline">
         <span class="conn-dot" aria-hidden="true"></span>
         <span id="conn-status">Disconnected</span>
@@ -41,53 +36,67 @@
     </header>
 
     <section class="status-strip" aria-label="Flight Status">
-      <article class="status-card" id="card-mode">
-        <span class="status-label">Mode</span>
-        <strong id="val-mode">—</strong>
+      <article class="status-card mode" id="card-mode">
+        <span class="status-label">Flight Mode</span>
+        <div class="status-line">
+          <strong id="val-mode">—</strong>
+          <span class="status-dot" aria-hidden="true"></span>
+        </div>
         <span class="status-foot" id="val-vehicle">—</span>
       </article>
       <article class="status-card" id="card-armed">
         <span class="status-label">Armed</span>
         <strong id="val-armed">—</strong>
-      </article>
-      <article class="status-card" id="card-vehicle">
-        <span class="status-label">Status</span>
-        <strong id="val-status">—</strong>
         <span class="status-foot">MAV v<span id="val-mav">0</span></span>
       </article>
-      <article class="status-card" id="card-ekf">
-        <span class="status-label">EKF</span>
-        <strong id="val-ekf">—</strong>
-      </article>
-      <article class="status-card" id="card-gps">
-        <span class="status-label">GPS</span>
-        <strong id="val-fix">—</strong>
-        <span class="status-foot"><span id="val-sats">0</span> sats</span>
-      </article>
-      <article class="status-card" id="card-failsafe">
-        <span class="status-label">Failsafe</span>
-        <div class="fs-grid">
-          <span data-fs="battery">Bat</span>
-          <span data-fs="rc">RC</span>
-          <span data-fs="gps">GPS</span>
+      <article class="status-card gps" id="card-gps">
+        <span class="status-label">GPS Fix</span>
+        <div class="status-line">
+          <strong id="val-fix">—</strong>
         </div>
+        <span class="status-foot"><span id="val-sats">0</span> sats · HDOP <span id="val-hdop-mini">—</span></span>
       </article>
-      <article class="status-card" id="card-mission">
-        <span class="status-label">Mission</span>
-        <strong id="val-mission">—</strong>
-        <span class="status-foot">WP <span id="val-wp">0</span>/<span id="val-wp-total">0</span></span>
+      <article class="status-card battery" id="card-battery">
+        <span class="status-label">Battery</span>
+        <div class="status-line">
+          <strong id="val-volt-mini">—</strong>
+        </div>
+        <span class="status-foot"><span id="val-batt-pct">0</span>%</span>
+      </article>
+      <article class="status-card datalink" id="card-datalink">
+        <span class="status-label">Datalink</span>
+        <div class="status-line">
+          <strong id="val-link-mini">—</strong>
+        </div>
+        <span class="status-foot"><span id="val-rssi-mini">—</span></span>
       </article>
     </section>
 
     <main class="grid">
-      <!-- LEFT 50% — top: Attitude, bottom: GPS+Map -->
+      <!-- LEFT 60% — top: Attitude, bottom: GPS+Map -->
       <section class="panel panel-attitude">
         <header class="panel-header">
           <h2>Attitude</h2>
           <span class="panel-tag" id="val-fix-2">NO_GPS</span>
         </header>
         <div class="attitude-wrap">
-          <canvas id="horizon" aria-label="Artificial horizon"></canvas>
+          <div class="artificial-horizon" id="horizon-host">
+            <canvas id="horizon" aria-label="Artificial horizon"></canvas>
+            <div class="hud-overlay">
+              <div class="hud-corner top-left">
+                <div class="hud-label">Airspeed</div>
+                <div class="hud-value"><strong id="val-airspeed">0.0</strong><span class="hud-unit">m/s</span></div>
+              </div>
+              <div class="hud-corner top-right">
+                <div class="hud-label">Altitude</div>
+                <div class="hud-value"><strong id="val-alt-big">0.0</strong><span class="hud-unit">m</span></div>
+              </div>
+              <div class="hud-corner bottom-center">
+                <div class="hud-label">Heading</div>
+                <div class="hud-value"><strong id="val-heading-big">0°</strong><span class="hud-unit" id="val-heading-cardinal">N</span></div>
+              </div>
+            </div>
+          </div>
           <div class="att-readout">
             <div><span>Roll</span><strong id="val-roll">0.0°</strong></div>
             <div><span>Pitch</span><strong id="val-pitch">0.0°</strong></div>
@@ -118,83 +127,139 @@
         </div>
       </section>
 
-      <!-- RIGHT 50% — top: Battery, middle: Telemetry/Radio, bottom: IMU + Baro + Mission -->
-      <section class="panel panel-battery">
-        <header class="panel-header">
-          <h2>Battery</h2>
-          <span class="panel-tag" id="val-batt-pct">0%</span>
-        </header>
-        <div class="bar-mini">
-          <div class="bar-fill" id="battery-fill"></div>
-        </div>
-        <div class="info-grid">
-          <div class="info-cell"><span>Voltage</span><strong id="val-volt">—</strong></div>
-          <div class="info-cell"><span>Current</span><strong id="val-curr">—</strong></div>
-          <div class="info-cell"><span>Remaining</span><strong id="val-remaining">—</strong></div>
-          <div class="info-cell"><span>Consumed</span><strong id="val-consumed">—</strong></div>
-          <div class="info-cell"><span>Power</span><strong id="val-power">—</strong></div>
-          <div class="info-cell"><span>Temp</span><strong id="val-btemp">—</strong></div>
-          <div class="info-cell"><span>Flight left</span><strong id="val-flight">—</strong></div>
-          <div class="info-cell"><span>Health</span><strong id="val-bhealth">—</strong></div>
-        </div>
-      </section>
-
-      <section class="panel panel-radio">
-        <header class="panel-header">
-          <h2>Telemetry / Radio</h2>
-          <span class="panel-tag" id="val-link">Link 0%</span>
-        </header>
-        <div class="info-grid">
-          <div class="info-cell"><span>RSSI (air)</span><strong id="val-rssi">—</strong></div>
-          <div class="info-cell"><span>RSSI (gnd)</span><strong id="val-remrssi">—</strong></div>
-          <div class="info-cell"><span>Noise (air)</span><strong id="val-noise">—</strong></div>
-          <div class="info-cell"><span>Noise (gnd)</span><strong id="val-remnoise">—</strong></div>
-          <div class="info-cell"><span>RX errors</span><strong id="val-rxerr">—</strong></div>
-          <div class="info-cell"><span>Latency</span><strong id="val-latency">—</strong></div>
-        </div>
-      </section>
-
-      <section class="panel panel-imu">
-        <header class="panel-header">
-          <h2>IMU + Compass</h2>
-          <span class="panel-tag">X·Y·Z</span>
-        </header>
-        <div class="imu-row">
-          <div class="info-grid">
-            <div class="info-cell"><span>Accel</span><strong id="val-accel">—</strong></div>
-            <div class="info-cell"><span>Gyro</span><strong id="val-gyro">—</strong></div>
-            <div class="info-cell"><span>Mag</span><strong id="val-mag">—</strong></div>
-            <div class="info-cell"><span>Vibe</span><strong id="val-vibe">—</strong></div>
-            <div class="info-cell"><span>IMU temp</span><strong id="val-imu-temp">—</strong></div>
-            <div class="info-cell"><span>Pressure</span><strong id="val-pressure">—</strong></div>
-          </div>
-          <div class="compass-strip">
-            <canvas id="compass" aria-label="Compass"></canvas>
-            <div class="compass-readout">
-              <strong id="val-compass">0°</strong>
-              <span>Heading</span>
-              <small>Home → <span id="val-bearing-2">—</span></small>
+      <!-- RIGHT 40% — 4 stacked sub-panels -->
+      <aside class="right-stack">
+        <!-- Battery -->
+        <section class="panel panel-battery">
+          <header class="panel-header">
+            <h2>Battery Analytics</h2>
+            <span class="panel-tag"><span id="val-batt-pct-2">0</span>%</span>
+          </header>
+          <div class="panel-body">
+            <div class="battery-row">
+              <div class="battery-stat">
+                <span class="sub-label">Total Voltage</span>
+                <strong class="sub-value" id="val-volt">—</strong>
+                <div class="bar-mini"><div class="bar-fill bar-orange" id="battery-fill"></div></div>
+              </div>
+              <div class="battery-stat">
+                <span class="sub-label">Current Draw</span>
+                <strong class="sub-value" id="val-curr">—</strong>
+                <span class="sub-mini" id="val-power">—</span>
+              </div>
+            </div>
+            <div class="sub-grid sub-grid-2">
+              <div class="sub-cell"><span class="sub-label">Consumed</span><strong class="sub-value" id="val-consumed">—</strong></div>
+              <div class="sub-cell"><span class="sub-label">Temp</span><strong class="sub-value" id="val-btemp">—</strong></div>
+              <div class="sub-cell"><span class="sub-label">Flight Left</span><strong class="sub-value" id="val-flight">—</strong></div>
+              <div class="sub-cell"><span class="sub-label">Health</span><strong class="sub-value" id="val-bhealth">—</strong></div>
+            </div>
+            <div class="cell-list" id="battery-cells">
+              <div class="cell-row"><span class="cell-label">Cell 1</span><span class="cell-value" data-cell="0">—</span></div>
+              <div class="cell-row"><span class="cell-label">Cell 2</span><span class="cell-value" data-cell="1">—</span></div>
+              <div class="cell-row"><span class="cell-label">Cell 3</span><span class="cell-value" data-cell="2">—</span></div>
+              <div class="cell-row"><span class="cell-label">Cell 4</span><span class="cell-value" data-cell="3">—</span></div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      <section class="panel panel-mission">
-        <header class="panel-header">
-          <h2>Mission</h2>
-          <span class="panel-tag" id="val-mission-state">Idle</span>
-        </header>
-        <div class="info-grid">
-          <div class="info-cell"><span>Current WP</span><strong id="val-cwp">—</strong></div>
-          <div class="info-cell"><span>Total WPs</span><strong id="val-twp">—</strong></div>
-          <div class="info-cell"><span>Dist next</span><strong id="val-dnext">—</strong></div>
-          <div class="info-cell"><span>ETA next</span><strong id="val-eta-wp">—</strong></div>
-        </div>
-        <div class="bar-mini"><div class="bar-fill bar-success" id="mission-bar"></div></div>
-        <div class="status-foot mono">
-          Progress <strong id="val-progress">0%</strong> · elapsed <span id="val-mission-time">00:00</span>
-        </div>
-      </section>
+        <!-- Radio -->
+        <section class="panel panel-radio">
+          <header class="panel-header">
+            <h2>Signal Intelligence</h2>
+            <span class="panel-tag" id="val-link">Link 0%</span>
+          </header>
+          <div class="panel-body">
+            <div class="sub-grid sub-grid-2">
+              <div class="sub-cell">
+                <span class="sub-label">RSSI</span>
+                <strong class="sub-value" id="val-rssi">—</strong>
+              </div>
+              <div class="sub-cell">
+                <span class="sub-label">Noise</span>
+                <strong class="sub-value" id="val-noise">—</strong>
+              </div>
+              <div class="sub-cell">
+                <span class="sub-label">RSSI (gnd)</span>
+                <strong class="sub-value" id="val-remrssi">—</strong>
+              </div>
+              <div class="sub-cell">
+                <span class="sub-label">Noise (gnd)</span>
+                <strong class="sub-value" id="val-remnoise">—</strong>
+              </div>
+            </div>
+            <div class="meter-row">
+              <div class="meter-row-head">
+                <span class="sub-label">Packet Loss</span>
+                <span class="meter-value" id="val-pktloss">0.0%</span>
+              </div>
+              <div class="bar-mini"><div class="bar-fill bar-cyan" id="pktloss-fill"></div></div>
+            </div>
+            <div class="sub-grid sub-grid-2">
+              <div class="sub-cell"><span class="sub-label">RX Errors</span><strong class="sub-value" id="val-rxerr">—</strong></div>
+              <div class="sub-cell"><span class="sub-label">Latency</span><strong class="sub-value" id="val-latency">—</strong></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- IMU -->
+        <section class="panel panel-imu">
+          <header class="panel-header">
+            <h2>Inertial Sensors</h2>
+            <span class="panel-tag">X·Y·Z</span>
+          </header>
+          <div class="panel-body">
+            <div class="sub-grid sub-grid-3">
+              <div class="sub-cell"><span class="sub-label">Accel X</span><strong class="sub-value" id="val-accel-x">—</strong></div>
+              <div class="sub-cell"><span class="sub-label">Accel Y</span><strong class="sub-value" id="val-accel-y">—</strong></div>
+              <div class="sub-cell"><span class="sub-label">Accel Z</span><strong class="sub-value" id="val-accel-z">—</strong></div>
+              <div class="sub-cell"><span class="sub-label">Gyro R</span><strong class="sub-value" id="val-gyro-r">—</strong></div>
+              <div class="sub-cell"><span class="sub-label">Gyro P</span><strong class="sub-value" id="val-gyro-p">—</strong></div>
+              <div class="sub-cell"><span class="sub-label">Gyro Y</span><strong class="sub-value" id="val-gyro-y">—</strong></div>
+              <div class="sub-cell"><span class="sub-label">Mag X</span><strong class="sub-value" id="val-mag-x">—</strong></div>
+              <div class="sub-cell"><span class="sub-label">Mag Y</span><strong class="sub-value" id="val-mag-y">—</strong></div>
+              <div class="sub-cell"><span class="sub-label">Mag Z</span><strong class="sub-value" id="val-mag-z">—</strong></div>
+              <div class="sub-cell"><span class="sub-label">Vibe</span><strong class="sub-value" id="val-vibe">—</strong></div>
+              <div class="sub-cell"><span class="sub-label">IMU T</span><strong class="sub-value" id="val-imu-temp">—</strong></div>
+              <div class="sub-cell"><span class="sub-label">Pressure</span><strong class="sub-value" id="val-pressure">—</strong></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Mission -->
+        <section class="panel panel-mission">
+          <header class="panel-header">
+            <h2>Mission Progress</h2>
+            <span class="panel-tag" id="val-mission-state">Idle</span>
+          </header>
+          <div class="panel-body">
+            <div class="mission-row">
+              <div class="stat">
+                <span class="sub-label">Current WP</span>
+                <strong class="sub-value"><span id="val-cwp">—</span><span class="stat-sub">/<span id="val-twp">—</span></span></strong>
+              </div>
+              <div class="stat" style="text-align:right;">
+                <span class="sub-label">Distance</span>
+                <strong class="sub-value" id="val-dnext">—</strong>
+              </div>
+            </div>
+            <div class="mission-row">
+              <div class="stat">
+                <span class="sub-label">ETA Next</span>
+                <strong class="sub-value" id="val-eta-wp">—</strong>
+              </div>
+              <div class="stat" style="text-align:right;">
+                <span class="sub-label">Total Time</span>
+                <strong class="sub-value" id="val-mission-time">00:00</strong>
+              </div>
+            </div>
+            <div class="bar-mini"><div class="bar-fill bar-success" id="mission-bar"></div></div>
+            <div class="status-foot mono" style="font-size:10px; text-align:right;">
+              Progress <strong id="val-progress" style="color:var(--text);">0%</strong>
+            </div>
+          </div>
+        </section>
+      </aside>
     </main>
 
     <footer class="footer">

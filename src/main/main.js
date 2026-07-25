@@ -59,6 +59,16 @@ function createWindow() {
     }
   });
 
+  // Expose a counter to the renderer via a global so we can prove the
+  // main process is actually receiving packets.
+  let _packetCount = 0;
+  telemetry.on('raw', () => {
+    _packetCount++;
+    if (_packetCount % 50 === 0) {
+      console.log(`[main] ${_packetCount} MAVLink packets processed`);
+    }
+  });
+
   // expose the win so link-level events (mission/adsb) can forward to it
   mainWindow = win;
   return win;

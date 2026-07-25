@@ -46,21 +46,18 @@ export class Horizon {
     // Scale geometry to radius so a small canvas still looks correct.
     const s = Math.max(0.4, r / 100);
 
+    // Transparent clear so the host div's sky/ground gradient shows through.
     ctx.clearRect(0, 0, w, h);
 
     ctx.save();
     ctx.translate(cx, cy);
     ctx.rotate((this.roll * Math.PI) / 180);
 
-    // sky + ground
+    // pitch offset
     const pitchPx = (this.pitch / 90) * r;
-    ctx.fillStyle = '#0ea5e9';
-    ctx.fillRect(-r, -r, r * 2, r);
-    ctx.fillStyle = '#7c4a1d';
-    ctx.fillRect(-r, pitchPx, r * 2, r);
 
     // horizon line
-    ctx.strokeStyle = 'rgba(248, 250, 252, 0.8)';
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
     ctx.lineWidth = 1.5;
     ctx.beginPath();
     ctx.moveTo(-r, pitchPx);
@@ -68,12 +65,11 @@ export class Horizon {
     ctx.stroke();
 
     // pitch ticks
-    ctx.strokeStyle = 'rgba(248, 250, 252, 0.6)';
-    ctx.fillStyle = 'rgba(248, 250, 252, 0.85)';
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
     ctx.font = `${Math.max(7, Math.round(10 * s))}px JetBrains Mono`;
     const tickLen = 20 * s;
     const tickShort = 12 * s;
-    const labelOffset = 24 * s;
     for (let p = -30; p <= 30; p += 10) {
       if (p === 0) continue;
       const y = pitchPx + (p / 90) * r;
@@ -81,17 +77,14 @@ export class Horizon {
       ctx.moveTo(-tickLen, y);
       ctx.lineTo(tickLen, y);
       ctx.stroke();
-      ctx.fillText(`${p}°`, labelOffset, y + 3);
-      ctx.beginPath();
-      ctx.moveTo(-tickLen, y);
-      ctx.lineTo(-tickShort, y);
-      ctx.stroke();
+      ctx.fillText(`${p}°`, tickLen + 4, y + 3);
+      ctx.fillText(`${p}°`, -tickLen - 18, y + 3);
     }
     ctx.restore();
 
     // aircraft symbol (static on top)
     ctx.strokeStyle = '#fbbf24';
-    ctx.lineWidth = Math.max(1, 2 * s);
+    ctx.lineWidth = Math.max(1.5, 2 * s);
     const wingLen = 38 * s;
     const wingInner = 10 * s;
     const fuse = 6 * s;
@@ -105,16 +98,16 @@ export class Horizon {
     ctx.stroke();
 
     // outer ring
-    ctx.strokeStyle = 'rgba(148, 163, 184, 0.7)';
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.arc(cx, cy, r, 0, Math.PI * 2);
     ctx.stroke();
 
-    // roll arc
+    // roll arc + pointer
     ctx.save();
     ctx.translate(cx, cy);
-    ctx.strokeStyle = 'rgba(148, 163, 184, 0.6)';
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
     ctx.beginPath();
     ctx.arc(0, 0, r - 14 * s, -Math.PI / 2, Math.PI / 2);
     ctx.stroke();
@@ -126,17 +119,17 @@ export class Horizon {
     ctx.stroke();
     ctx.restore();
 
-    // heading indicator (strip at top)
-    ctx.fillStyle = 'rgba(248, 250, 252, 0.7)';
-    ctx.font = `${Math.max(7, Math.round(9 * s))}px JetBrains Mono`;
+    // heading strip at top — cardinal letters scroll with yaw
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+    ctx.font = `${Math.max(8, Math.round(10 * s))}px JetBrains Mono`;
     const headings = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
     ctx.save();
-    ctx.translate(cx, 12 * s);
-    const stripR = Math.min(r * 0.55, 50 * s);
+    ctx.translate(cx, 14 * s);
+    const stripR = Math.min(r * 0.55, 60 * s);
     for (let i = 0; i < headings.length; i++) {
       const angle = (i * 45 - this.yaw) * Math.PI / 180;
       const x = Math.sin(angle) * stripR;
-      ctx.fillText(headings[i], x - 6 * s, 0);
+      ctx.fillText(headings[i], x - 8 * s, 0);
     }
     ctx.fillStyle = '#fbbf24';
     ctx.beginPath();
