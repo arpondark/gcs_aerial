@@ -9,10 +9,7 @@ const els = {
   portSelect: document.getElementById('port-select'),
   baudSelect: document.getElementById('baud-select'),
   connectBtn: document.getElementById('connect-btn'),
-  disconnectBtn: document.getElementById('disconnect-btn'),
   refreshBtn: document.getElementById('refresh-ports'),
-  connPill: document.getElementById('conn-pill'),
-  connStatus: document.getElementById('conn-status'),
   diag: document.getElementById('diag'),
   envInfo: document.getElementById('env-info'),
   saveLogBtn: document.getElementById('save-log'),
@@ -77,19 +74,26 @@ async function refreshPorts() {
 
 async function setConnectedUi(connected, path, baud) {
   if (connected) {
-    els.connPill.dataset.state = 'online';
-    els.connStatus.textContent = `Connected · ${path}${baud ? ' @ ' + baud : ''}`;
-    els.connectBtn.disabled = true;
-    els.disconnectBtn.disabled = false;
+    els.connectBtn.dataset.state = 'connected';
+    els.connectBtn.textContent = 'Disconnect';
+    els.connectBtn.disabled = false;
     els.portSelect.disabled = true;
     els.baudSelect.disabled = true;
   } else {
-    els.connPill.dataset.state = 'offline';
-    els.connStatus.textContent = 'Disconnected';
+    els.connectBtn.dataset.state = 'disconnected';
+    els.connectBtn.textContent = 'Connect';
     els.connectBtn.disabled = false;
-    els.disconnectBtn.disabled = false;
     els.portSelect.disabled = false;
     els.baudSelect.disabled = false;
+  }
+}
+
+async function toggleConnect() {
+  const state = els.connectBtn.dataset.state;
+  if (state === 'connected') {
+    await disconnect();
+  } else if (state !== 'connecting') {
+    await connect();
   }
 }
 
@@ -98,8 +102,9 @@ function selectedPort() {
 }
 
 async function connect() {
-  els.connPill.dataset.state = 'connecting';
-  els.connStatus.textContent = 'Connecting…';
+  els.connectBtn.dataset.state = 'connecting';
+  els.connectBtn.textContent = 'Connecting…';
+  els.connectBtn.disabled = true;
   try {
     const res = await api.connect({
       path: selectedPort(),
@@ -120,13 +125,17 @@ async function connect() {
 }
 
 async function disconnect() {
-  await api.disconnect();
+  els.connectBtn.dataset.state = 'connecting';
+  els.connectBtn.textContent = 'Disconnecting…';
+  els.connectBtn.disabled = true;
+  try {
+    await api.disconnect();
+  } catch (_) { /* ignore */ }
   await setConnectedUi(false);
   setText('diag', 'Disconnected.');
 }
 
-els.connectBtn.addEventListener('click', connect);
-els.disconnectBtn.addEventListener('click', disconnect);
+els.connectBtn.addEventListener('click', toggleConnect);
 els.refreshBtn.addEventListener('click', refreshPorts);
 
 // Map controls
@@ -137,8 +146,10 @@ els.mapZoomIn.addEventListener('click', () => mapView.setZoom(mapView.zoom + 1))
 els.mapZoomOut.addEventListener('click', () => mapView.setZoom(mapView.zoom - 1));
 els.mapRecenter.addEventListener('click', () => {
   if (lastSnapshot) {
-    mapView.center = { lat: lastSnapshot.lat, lon: lastSnapshot.lon };
     mapView.setFollow(true);
+    // setFollow(true) already re-syncs the smoothed center to the current
+    // position. Snap the visual center too so the next frame is correct.
+    mapView.center = { lat: lastSnapshot.lat, lon: lastSnapshot.lon };
   }
 });
 
@@ -206,6 +217,14 @@ function renderAttitude(s) {
   setText('val-pitchrate', fmt.deg(s.pitch_rate_dps));
   setText('val-yawrate', fmt.deg(s.yaw_rate_dps));
 
+  // Extra flight data readout
+  setText('val-alt-readout', fmt.num(s.alt_rel_m || 0, 2) + ' m');
+  setText('val-gspeed', fmt.num(s.ground_speed_m_s || 0, 2) + ' m/s');
+  setText('val-vspeed', fmt.num(s.vertical_speed_m_s || 0, 2) + ' m/s');
+  setText('val-dwp', s.distance_to_next_m > 0 ? fmt.m(s.distance_to_next_m) : '—');
+  setText('val-dmav', s.distance_to_home_m > 0 ? fmt.m(s.distance_to_home_m) : '—');
+  setText('val-heading-readout', `${fmt.int(s.heading_deg || 0)}°`);
+
   // HUD overlay boxes
   const air = s.air_speed_m_s || s.ground_speed_m_s || 0;
   const alt = s.alt_rel_m || 0;
@@ -231,9 +250,12 @@ function renderGps(s) {
 function renderBattery(s) {
   const pct = Math.max(0, Math.min(100, s.battery_remaining_pct || 0));
   setText('val-batt-pct-2', String(Math.round(pct)));
-  setText('val-volt', fmt.v(s.battery_voltage_v));
-  setText('val-curr', fmt.a(s.battery_current_a));
-  setText('val-power', fmt.w(s.battery_power_w));
+  // Only show voltage if it's a real reading (positive number). 0 means we
+  // haven't received a SYS_STATUS or BATTERY_STATUS yet.
+  setText('val-volt', s.battery_voltage_v > 0 ? fmt.v(s.battery_voltage_v) : '—');
+  setText('val-volt-mini', s.battery_voltage_v > 0 ? fmt.v(s.battery_voltage_v) : '—');
+  setText('val-curr', s.battery_current_a > 0 ? fmt.a(s.battery_current_a) : '—');
+  setText('val-power', s.battery_power_w > 0 ? fmt.w(s.battery_power_w) : '—');
   setText('val-consumed', fmt.mah(s.battery_consumed_mah));
   setText('val-btemp', fmt.temp(s.battery_temp_c));
   setText('val-flight', s.flight_time_remaining_min ? `${s.flight_time_remaining_min} min` : '—');
@@ -308,9 +330,10 @@ function renderImu(s) {
   setText('val-mag-x', v(mag[0]));
   setText('val-mag-y', v(mag[1]));
   setText('val-mag-z', v(mag[2]));
+  // Priority row at top — Vibe, IMU T, Pressure
   setText('val-vibe', `${v(vibe[0])} / ${v(vibe[1])} / ${v(vibe[2])}`);
-  setText('val-imu-temp', fmt.temp(s.imu_temp_c));
-  setText('val-pressure', fmt.pressure(s.pressure_hpa));
+  setText('val-imu-temp', typeof s.imu_temp_c === 'number' && s.imu_temp_c !== 0 ? fmt.temp(s.imu_temp_c) : '—');
+  setText('val-pressure', typeof s.pressure_hpa === 'number' && s.pressure_hpa > 0 ? fmt.pressure(s.pressure_hpa) : '—');
 }
 
 function renderMission(s) {

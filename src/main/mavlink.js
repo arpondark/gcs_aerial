@@ -83,6 +83,7 @@ const MAV_DIALECT = {
   116: 116, // SCALED_IMU2
   129: 129, // SCALED_IMU3
   147: 147, // BATTERY_STATUS
+  241: 241, // VIBRATION
   242: 242, // HOME_POSITION
 };
 
@@ -150,26 +151,38 @@ class MAVLink {
     }
 
     const total = headerLen + payloadLen + 2; // + CRC
-    if (this._buffer.length < total) return null;
+    if (this._buffer.length < total) {
+      // Not enough data — but if a plausible packet doesn't fit in the buffer
+      // at this sync point, the sync is probably wrong. Skip the suspect magic
+      // byte and re-sync so we don't get stuck.
+      if (payloadLen > 0 && total > this._buffer.length && this._buffer.length < 256) {
+        this._buffer = this._buffer.slice(1);
+        return this._consumePacket();
+      }
+      return null;
+    }
 
     const payload = this._buffer.slice(offset, offset + payloadLen);
     const payloadCrc = this._buffer.slice(offset + payloadLen, total);
 
-    // Consume the packet from the buffer BEFORE decoding, so a decode failure
-    // doesn't leave the packet sitting in the buffer for endless retries.
-    this._buffer = this._buffer.slice(total);
+    // Save buffer state so we can rewind on decode failure (false sync).
+    const beforeDecode = this._buffer;
 
     let decoded;
     try {
       decoded = this._decode(msgId, payload);
     } catch (err) {
-      // Decoder threw — almost certainly a false sync (payload contained 0xfe/0xfd).
-      // The byte at startIdx was probably a data byte, not a magic byte.
-      // Since we already consumed the (suspect) total bytes, the next sync will
-      // search from the current buffer head for the next magic byte.
+      // Decoder threw — almost certainly a false sync (the byte we thought was
+      // magic was actually data). Restore the buffer and advance by 1 byte to
+      // try syncing from the next position. This prevents losing real packets
+      // that started further in the stream.
       console.warn(`[mavlink] decode failed for msgId=${msgId} len=${payloadLen}: ${err.message}`);
-      return null;
+      this._buffer = beforeDecode.slice(1);
+      return this._consumePacket();
     }
+
+    // Decode succeeded — consume the packet from the buffer.
+    this._buffer = beforeDecode.slice(total);
 
     return {
       magic, seq, sysId, compId, msgId,
@@ -201,6 +214,7 @@ class MAVLink {
         case 74: return this._vfrHud(p);
         case 109: return this._radio(p);
         case 147: return this._battery(p);
+        case 241: return this._vibration(p);
         case 242: return this._home(p);
         default: return { raw: p };
       }
@@ -257,11 +271,23 @@ class MAVLink {
 
   _rawImu(p) {
     if (p.length < 18) throw new Error('raw_imu payload too short');
-    return {
+    // RAW_IMU v1 layout: accel[3] (int16, mG), gyro[3] (int16, mrad/s),
+    // mag[3] (int16, mGa), then at offset 18: raw_temp (int16, cdegC).
+    // v1 minimum is 26 bytes (18 + 2 for temp) but some firmwares send
+    // longer; tolerate both.
+    const result = {
       accel: [p.readInt16LE(0) / 1000, p.readInt16LE(2) / 1000, p.readInt16LE(4) / 1000],
       gyro: [p.readInt16LE(6) / 1000, p.readInt16LE(8) / 1000, p.readInt16LE(10) / 1000],
       mag: [p.readInt16LE(12) / 1000, p.readInt16LE(14) / 1000, p.readInt16LE(16) / 1000],
     };
+    if (p.length >= 26) {
+      // 0x7FFF = invalid
+      const rawTemp = p.readInt16LE(18);
+      if (rawTemp !== 0x7fff && rawTemp !== -32768) {
+        result.temperature_c = rawTemp / 100;
+      }
+    }
+    return result;
   }
 
   _scaledPressure(p) {
@@ -339,15 +365,58 @@ class MAVLink {
     };
   }
 
-  _battery(p) {
-    if (p.length < 41) throw new Error('battery payload too short');
+  _vibration(p) {
+    // VIBRATION (msgId 241):
+    //   offset  0: time_usec (uint64)
+    //   offset  8: vibration_x (float, m/s²)
+    //   offset 12: vibration_y (float, m/s²)
+    //   offset 16: vibration_z (float, m/s²)
+    //   offset 20: clipping_x (uint32)
+    //   offset 24: clipping_y (uint32)
+    //   offset 28: clipping_z (uint32)
+    if (p.length < 20) throw new Error('vibration payload too short');
     return {
+      vibration_x: p.readFloatLE(8),
+      vibration_y: p.readFloatLE(12),
+      vibration_z: p.readFloatLE(16),
+    };
+  }
+
+  _battery(p) {
+    // BATTERY_STATUS v1 layout (per common.xml):
+    //   offset  0: current_battery (int16_t, cA)
+    //   offset  2: energy_consumed (uint16_t, hWh)
+    //   offset  4: voltages[10] (uint16_t[10], mV)  ← 10 cell voltages
+    //   offset 24: current_battery_id (uint8_t)
+    //   offset 25: battery_function (uint8_t)
+    //   offset 26: type (uint8_t)
+    //   offset 27: battery_remaining (int8_t, %)
+    //   offset 28: time_remaining (int32_t, sec)
+    //   offset 32: charge_state (uint8_t)
+    // v1 minimum payload is 33 bytes. v2 extends with voltages_ext, mode, fault_bitmask.
+    if (p.length < 28) throw new Error('battery payload too short');
+    // Per-cell voltages. NOTE: do NOT sum cells to get pack voltage — ArduPilot
+    // sometimes puts pack voltage in voltages[0] OR repeats per-cell values in
+    // all 10 slots, which would inflate the sum. Pack voltage should come from
+    // SYS_STATUS.voltage_battery (offset 14, mV) which is the authoritative
+    // source.
+    const cells = [];
+    for (let i = 0; i < 10; i++) {
+      const v = p.readUInt16LE(4 + i * 2);
+      // 0xFFFF = unknown (per spec); skip
+      if (v === 0xffff || v === 0) continue;
+      cells.push(v / 1000);
+    }
+    const result = {
       current: p.readInt16LE(0) / 100,
       consumed_mah: p.readUInt16LE(2),
-      voltage_v: p.readUInt16LE(36) / 1000,
-      temperature_c: p.readInt8(40),
-      remaining_pct: p.readInt8(34),
+      cell_volts_v: cells,
+      // Do NOT set voltage_v here — let SYS_STATUS be authoritative.
     };
+    if (p.length >= 28) result.remaining_pct = p.readInt8(27);
+    // v2-only fields
+    if (p.length >= 41) result.temperature_c = p.readInt8(40);
+    return result;
   }
 
   _home(p) {

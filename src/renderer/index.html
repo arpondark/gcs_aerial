@@ -3,13 +3,13 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=1280, initial-scale=1" />
-    <title>AERO-GCS ALPHA — UIU Aerial Robotics</title>
+    <title>UIU AERIAL ROBOTICS GCS</title>
     <link rel="stylesheet" href="styles/app.css" />
   </head>
   <body>
     <header class="topbar">
       <div class="brand">
-        <span class="brand-title">AERO-GCS ALPHA</span>
+        <span class="brand-title">UIU AERIAL ROBOTICS GCS</span>
         <div class="brand-divider"></div>
         <div class="connection">
           <label class="ctrl">Port
@@ -25,13 +25,8 @@
             </select>
           </label>
           <button class="btn btn-secondary" id="refresh-ports">Rescan</button>
-          <button class="btn btn-primary" id="connect-btn">Connect</button>
-          <button class="btn btn-ghost" id="disconnect-btn" disabled>Disconnect</button>
+          <button class="btn btn-primary btn-toggle" id="connect-btn" data-state="disconnected">Connect</button>
         </div>
-      </div>
-      <div class="conn-pill" id="conn-pill" data-state="offline">
-        <span class="conn-dot" aria-hidden="true"></span>
-        <span id="conn-status">Disconnected</span>
       </div>
     </header>
 
@@ -105,6 +100,14 @@
             <div><span>R rate</span><strong id="val-rollrate">0°/s</strong></div>
             <div><span>P rate</span><strong id="val-pitchrate">0°/s</strong></div>
             <div><span>Y rate</span><strong id="val-yawrate">0°/s</strong></div>
+            <div class="readout-divider"></div>
+            <div><span>Altitude</span><strong id="val-alt-readout">0.00 m</strong></div>
+            <div><span>GroundSpeed</span><strong id="val-gspeed">0.00 m/s</strong></div>
+            <div><span>V Speed</span><strong id="val-vspeed">0.00 m/s</strong></div>
+            <div class="readout-divider"></div>
+            <div><span>Dist to WP</span><strong id="val-dwp">—</strong></div>
+            <div><span>Dist to MAV</span><strong id="val-dmav">—</strong></div>
+            <div><span>Heading</span><strong id="val-heading-readout">0°</strong></div>
           </div>
         </div>
       </section>
@@ -209,6 +212,20 @@
             <span class="panel-tag">X·Y·Z</span>
           </header>
           <div class="panel-body">
+            <div class="sub-grid sub-grid-3 imu-summary">
+              <div class="sub-cell imu-priority">
+                <span class="sub-label">Vibe</span>
+                <strong class="sub-value" id="val-vibe">—</strong>
+              </div>
+              <div class="sub-cell imu-priority">
+                <span class="sub-label">IMU T</span>
+                <strong class="sub-value" id="val-imu-temp">—</strong>
+              </div>
+              <div class="sub-cell imu-priority">
+                <span class="sub-label">Pressure</span>
+                <strong class="sub-value" id="val-pressure">—</strong>
+              </div>
+            </div>
             <div class="sub-grid sub-grid-3">
               <div class="sub-cell"><span class="sub-label">Accel X</span><strong class="sub-value" id="val-accel-x">—</strong></div>
               <div class="sub-cell"><span class="sub-label">Accel Y</span><strong class="sub-value" id="val-accel-y">—</strong></div>
@@ -219,9 +236,6 @@
               <div class="sub-cell"><span class="sub-label">Mag X</span><strong class="sub-value" id="val-mag-x">—</strong></div>
               <div class="sub-cell"><span class="sub-label">Mag Y</span><strong class="sub-value" id="val-mag-y">—</strong></div>
               <div class="sub-cell"><span class="sub-label">Mag Z</span><strong class="sub-value" id="val-mag-z">—</strong></div>
-              <div class="sub-cell"><span class="sub-label">Vibe</span><strong class="sub-value" id="val-vibe">—</strong></div>
-              <div class="sub-cell"><span class="sub-label">IMU T</span><strong class="sub-value" id="val-imu-temp">—</strong></div>
-              <div class="sub-cell"><span class="sub-label">Pressure</span><strong class="sub-value" id="val-pressure">—</strong></div>
             </div>
           </div>
         </section>

@@ -24,13 +24,30 @@ export class MapView {
     this.track = [];
     this.home = null;
     this.position = null;
+    // Smoothed render position: the *displayed* position is interpolated
+    // between the last telemetry update and a moving target so the map
+    // updates smoothly every frame instead of jumping at 10 Hz.
+    this._renderPos = null; // {lat, lon}
+    this._posTarget = null; // {lat, lon}
+    this._posFrom = null;   // {lat, lon}
+    this._posAnimStarted = 0; // ms
+    this._posAnimDuration = 120; // ms interpolation window
+    this._lastPosChangeMs = 0;
     this.heading = 0;
+    this._renderHeading = 0;
+    this._headingFrom = 0;
+    this._headingTarget = 0;
+    this._headingAnimStarted = 0;
     this.missionWaypoints = []; // [{lat, lon, alt, command, name}]
     this.otherAircraft = []; // [{lat, lon, alt, heading, callsign, speed, type}]
     this.geofence = []; // polygon [[lat, lon], ...]
     this.follow = true;
     this.zoom = 16;
     this.center = null; // {lat, lon}
+    // Smoothed center for follow mode (so the map keeps recentering every
+    // frame as the drone moves, instead of freezing between telemetry ticks).
+    this._renderCenter = null;
+    this._centerTarget = null;
     this.tileCache = new Map();
     this._setup();
     this.api = api;
@@ -42,6 +59,11 @@ export class MapView {
       // Refresh visible tiles whenever the view changes.
       this._lastTileKey = '';
     }
+    // Always-on frame loop — drives smooth real-time rendering regardless
+    // of how often telemetry packets arrive.
+    this._rafHandle = null;
+    this._rafLoop = this._rafLoop.bind(this);
+    this._rafLoop();
   }
   _setup() {
     this._ratio = window.devicePixelRatio || 1;
@@ -72,18 +94,123 @@ export class MapView {
     this.draw();
   }
 
+  _easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
+
+  _rafLoop() {
+    const now = performance.now();
+    let needsRedraw = false;
+
+    // ---- Interpolate drone position ----
+    if (this._posFrom && this._posTarget && this._renderPos) {
+      const t = Math.min(1, (now - this._posAnimStarted) / this._posAnimDuration);
+      if (t < 1) {
+        const e = this._easeOutCubic(t);
+        this._renderPos = {
+          lat: this._posFrom.lat + (this._posTarget.lat - this._posFrom.lat) * e,
+          lon: this._posFrom.lon + (this._posTarget.lon - this._posFrom.lon) * e,
+        };
+        needsRedraw = true;
+      }
+    }
+
+    // ---- Interpolate heading ----
+    if (this._headingFrom !== undefined && this._headingTarget !== undefined) {
+      const t = Math.min(1, (now - this._headingAnimStarted) / this._posAnimDuration);
+      if (t < 1) {
+        const e = this._easeOutCubic(t);
+        let delta = this._headingTarget - this._headingFrom;
+        // Normalize delta into [-180, +180]
+        if (delta > 180) delta -= 360;
+        if (delta < -180) delta += 360;
+        this._renderHeading = (this._headingFrom + delta * e + 360) % 360;
+        needsRedraw = true;
+      }
+    }
+
+    // ---- Interpolate map center (follow mode) ----
+    if (this.follow && this._renderCenter && this._centerTarget && this._posTarget) {
+      const t = Math.min(1, (now - this._posAnimStarted) / this._posAnimDuration);
+      if (t < 1) {
+        const e = this._easeOutCubic(t);
+        const newCenter = {
+          lat: this._renderCenter.lat + (this._centerTarget.lat - this._renderCenter.lat) * e,
+          lon: this._renderCenter.lon + (this._centerTarget.lon - this._renderCenter.lon) * e,
+        };
+        // Only mark dirty if the center actually moved this frame.
+        if (newCenter.lat !== this.center?.lat || newCenter.lon !== this.center?.lon) {
+          this.center = newCenter;
+          needsRedraw = true;
+          // Trigger tile fetch when the center crosses into a new tile cell —
+          // this is what makes the map look real-time as the drone moves.
+          const cx = this._lon2tileX(this.center.lon, this.zoom);
+          const cy = this._lat2tileY(this.center.lat, this.zoom);
+          const tcx = Math.floor(cx);
+          const tcy = Math.floor(cy);
+          if (tcx !== this._lastTileCellX || tcy !== this._lastTileCellY) {
+            this._lastTileCellX = tcx;
+            this._lastTileCellY = tcy;
+            // Defer the actual fetch so it doesn't block the rAF draw.
+            this._maybeRequestTiles();
+          }
+        }
+      }
+    }
+
+    if (needsRedraw) this.draw();
+
+    this._rafHandle = requestAnimationFrame(this._rafLoop);
+  }
+
   // ---- Setters (called from telemetry renderer) ----
   setHome(home) {
     if (home && (home.lat || home.lon)) {
       this.home = { ...home };
-      if (!this.center) this.center = { lat: home.lat, lon: home.lon };
+      if (!this.center) {
+        this.center = { lat: home.lat, lon: home.lon };
+        this._renderCenter = { lat: home.lat, lon: home.lon };
+        this._centerTarget = { lat: home.lat, lon: home.lon };
+      }
     }
     this.draw();
+    this._maybeRequestTiles(true);  // force refresh after home updates
   }
   setPosition(pos) {
     if (!pos) return;
+    // First valid position: snap everything to it without animation so the
+    // map doesn't slide in from (0,0).
+    const isFirstFix = !this._renderPos || !this.position;
+    if (isFirstFix) {
+      this._renderPos = { lat: pos.lat, lon: pos.lon };
+      this._posFrom = { lat: pos.lat, lon: pos.lon };
+      this._posTarget = { lat: pos.lat, lon: pos.lon };
+      this._renderCenter = { lat: pos.lat, lon: pos.lon };
+      this._centerTarget = { lat: pos.lat, lon: pos.lon };
+      // Seed the tile-cell latch so the rAF loop's "did we cross a tile"
+      // check fires the moment the center moves.
+      this._lastTileCellX = Math.floor(this._lon2tileX(pos.lon, this.zoom));
+      this._lastTileCellY = Math.floor(this._lat2tileY(pos.lat, this.zoom));
+    } else {
+      // Subsequent positions: kick off a short interpolation from the
+      // *previous rendered* position to the new telemetry target. This is
+      // what makes the map feel like Mission Planner — the drone glides
+      // smoothly between packet updates.
+      const fromLat = this._renderPos.lat;
+      const fromLon = this._renderPos.lon;
+      // Only animate if the drone actually moved; otherwise leave the
+      // existing interpolation state alone (avoids 60 fps redraws with no
+      // visible change).
+      if (Math.abs(fromLat - pos.lat) > 1e-9 || Math.abs(fromLon - pos.lon) > 1e-9) {
+        this._posFrom = { lat: fromLat, lon: fromLon };
+        this._posTarget = { lat: pos.lat, lon: pos.lon };
+        this._posAnimStarted = performance.now();
+        this._centerTarget = { lat: pos.lat, lon: pos.lon };
+      }
+    }
     this.position = pos;
-    if (this.follow) this.center = { lat: pos.lat, lon: pos.lon };
+    if (this.follow && this._renderCenter) {
+      // Keep center in sync immediately too (the rAF loop will smooth it).
+      this.center = { lat: this._renderCenter.lat, lon: this._renderCenter.lon };
+    }
     if (this.track.length > 0) {
       const last = this.track[this.track.length - 1];
       if (Math.abs(last.lat - pos.lat) > 1e-7 || Math.abs(last.lon - pos.lon) > 1e-7) {
@@ -93,18 +220,55 @@ export class MapView {
     } else {
       this.track.push({ lat: pos.lat, lon: pos.lon });
     }
-    this.draw();
+    this._lastPosChangeMs = Date.now();
+    // Always re-fetch tiles once we have a real position; the rAF loop
+    // will handle subsequent per-frame fetches when the center crosses
+    // tile-cell boundaries.
     this._maybeRequestTiles();
+    // First fix: the rAF loop won't trigger a draw because the snap has
+    // no from→target motion, so paint the frame explicitly so the drone
+    // appears on the map immediately.
+    if (isFirstFix) this.draw();
   }
-  setHeading(deg) { this.heading = deg || 0; this.draw(); }
-  setMissionWaypoints(wps) { this.missionWaypoints = Array.isArray(wps) ? wps : []; this.draw(); }
-  setOtherAircraft(list) { this.otherAircraft = Array.isArray(list) ? list : []; this.draw(); }
-  setGeofence(polygon) { this.geofence = Array.isArray(polygon) ? polygon : []; this.draw(); }
+  setHeading(deg) {
+    const next = deg || 0;
+    if (this._renderHeading === undefined || this._headingFrom === undefined) {
+      this._renderHeading = next;
+      this._headingFrom = next;
+      this._headingTarget = next;
+      this._headingAnimStarted = 0;
+    } else {
+      // Pick the shorter arc so we never spin the long way around 359°→1°.
+      const from = this._renderHeading;
+      const to = next;
+      const delta = ((to - from) + 540) % 360 - 180;
+      if (Math.abs(delta) > 0.5) {
+        this._headingFrom = from;
+        this._headingTarget = (from + delta + 360) % 360;
+        this._headingAnimStarted = performance.now();
+      }
+    }
+    this.heading = next;
+  }
+  setMissionWaypoints(wps) {
+    this.missionWaypoints = Array.isArray(wps) ? wps : [];
+    this.draw();
+  }
+  setOtherAircraft(list) {
+    this.otherAircraft = Array.isArray(list) ? list : [];
+    this.draw();
+  }
+  setGeofence(polygon) {
+    this.geofence = Array.isArray(polygon) ? polygon : [];
+    this.draw();
+  }
   setFollow(on) {
     this.follow = !!on;
     if (this.follow && this.position) {
-      this.center = { lat: this.position.lat, lon: this.position.lon };
-      this.draw();
+      // Re-sync so the next frame centers on the drone instantly.
+      this._renderCenter = { lat: this.position.lat, lon: this.position.lon };
+      this.center = { ...this._renderCenter };
+      this._centerTarget = { ...this._renderCenter };
     }
   }
   setZoom(z) {
@@ -112,7 +276,12 @@ export class MapView {
     this.draw();
     this._maybeRequestTiles();
   }
-  setTileSource(src) { this.tileSource = src || 'osm'; this.tileCache.clear(); this.draw(); this._maybeRequestTiles(); }
+  setTileSource(src) {
+    this.tileSource = src || 'osm';
+    this.tileCache.clear();
+    this.draw();
+    this._maybeRequestTiles();
+  }
 
   // ---- Tile helpers ----
   _lon2tileX(lon, zoom) { return ((lon + 180) / 360) * Math.pow(2, zoom); }
@@ -132,8 +301,10 @@ export class MapView {
   _visibleTileRange() {
     const cx = this._lon2tileX(this.center.lon, this.zoom);
     const cy = this._lat2tileY(this.center.lat, this.zoom);
-    const tilesAcross = this._w / this.tilePixelSize + 2;
-    const tilesDown = this._h / this.tilePixelSize + 2;
+    // Fetch a generous perimeter around the viewport so high-speed moves
+    // don't show as blank squares before tiles arrive.
+    const tilesAcross = this._w / this.tilePixelSize + 4;
+    const tilesDown = this._h / this.tilePixelSize + 4;
     const ratio = this._w / this._h;
     const halfW = Math.ceil(tilesAcross / 2);
     const halfH = Math.ceil(tilesDown / 2);
@@ -147,12 +318,12 @@ export class MapView {
     };
   }
 
-  async _maybeRequestTiles() {
+  async _maybeRequestTiles(force = false) {
     if (!this.api || !this.api.getMapTiles) return;
     if (!this.center) return;
     const r = this._visibleTileRange();
     const key = `${this.zoom}|${r.x0}|${r.y0}|${r.x1}|${r.y1}|${this.tileSource}`;
-    if (key === this._lastTileKey) return;
+    if (!force && key === this._lastTileKey) return;
     this._lastTileKey = key;
     const urls = [];
     for (let x = r.x0; x <= r.x1; x++) {
@@ -160,6 +331,8 @@ export class MapView {
         urls.push(this._tileUrl(x, y, this.zoom));
       }
     }
+    // Kick off a fresh draw immediately so the loading placeholders appear.
+    this.draw();
     try {
       const tiles = await this.api.getMapTiles(urls);
       if (!tiles || !tiles.length) return;
@@ -169,7 +342,7 @@ export class MapView {
         img.onload = () => { this.tileCache.set(t.url, img); this.draw(); };
         img.onerror = () => { /* tile remains missing; grid fallback shows */ };
         img.src = t.dataUrl;
-        this.tileCache.set(t.url, img);
+        // Don't cache a not-yet-loaded image; it'll be added on load.
       });
       this.draw();
     } catch (_) { /* ignore */ }
@@ -372,9 +545,14 @@ export class MapView {
   }
 
   _drawDrone(ctx) {
-    const { x, y } = this._project(this.position.lon, this.position.lat);
+    // Use the *interpolated* position and heading so the drone glides
+    // smoothly between telemetry packets instead of teleporting.
+    const pos = this._renderPos || this.position;
+    const heading = this._renderHeading ?? this.heading;
+    if (!pos) return;
+    const { x, y } = this._project(pos.lon, pos.lat);
     // heading vector
-    const headingRad = ((this.heading || 0) * Math.PI) / 180;
+    const headingRad = ((heading || 0) * Math.PI) / 180;
     ctx.strokeStyle = 'rgba(34, 197, 94, 0.45)';
     ctx.lineWidth = 1.5;
     ctx.beginPath();
@@ -544,6 +722,7 @@ export class MapView {
         lon: this.center.lon - dLon,
       };
       this.draw();
+      this._maybeRequestTiles();
     });
     const endDrag = () => { last = null; };
     c.addEventListener('pointerup', endDrag);
@@ -551,7 +730,11 @@ export class MapView {
     c.addEventListener('pointerleave', endDrag);
     c.addEventListener('dblclick', () => {
       // dblclick re-centers on the drone
-      if (this.position) this.center = { lat: this.position.lat, lon: this.position.lon };
+      if (this.position) {
+        this.center = { lat: this.position.lat, lon: this.position.lon };
+        this._renderCenter = { ...this.center };
+        this._centerTarget = { ...this.center };
+      }
       this.follow = true;
       this.draw();
     });
