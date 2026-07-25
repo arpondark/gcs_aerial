@@ -1,5 +1,4 @@
 import { fmt, setText, setState } from './format.js';
-import { StreamChart, AttitudeTrailChart } from './charts.js';
 import { Horizon } from './horizon.js';
 import { MapView } from './map.js';
 import { Compass } from './compass.js';
@@ -8,7 +7,6 @@ const api = window.aerogcs;
 
 const els = {
   portSelect: document.getElementById('port-select'),
-  portManual: document.getElementById('port-manual'),
   baudSelect: document.getElementById('baud-select'),
   connectBtn: document.getElementById('connect-btn'),
   disconnectBtn: document.getElementById('disconnect-btn'),
@@ -28,9 +26,6 @@ const els = {
 const horizon = new Horizon(document.getElementById('horizon'));
 const mapView = new MapView(document.getElementById('map'), { api });
 const compass = new Compass(document.getElementById('compass'));
-const rssiChart = new StreamChart(document.getElementById('chart-rssi'), { color: '#22c55e' });
-const baroChart = new StreamChart(document.getElementById('chart-baro'), { color: '#38bdf8' });
-const attTrail = new AttitudeTrailChart(document.getElementById('chart-att'));
 
 let lastSnapshot = null;
 let lastHeartbeatMs = 0;
@@ -88,22 +83,18 @@ async function setConnectedUi(connected, path, baud) {
     els.connectBtn.disabled = true;
     els.disconnectBtn.disabled = false;
     els.portSelect.disabled = true;
-    els.portManual.disabled = true;
     els.baudSelect.disabled = true;
   } else {
     els.connPill.dataset.state = 'offline';
     els.connStatus.textContent = 'Disconnected';
     els.connectBtn.disabled = false;
-    els.disconnectBtn.disabled = true;
+    els.disconnectBtn.disabled = false;
     els.portSelect.disabled = false;
-    els.portManual.disabled = false;
     els.baudSelect.disabled = false;
   }
 }
 
 function selectedPort() {
-  const manual = (els.portManual.value || '').trim();
-  if (manual) return manual;
   return (els.portSelect.value || '').trim();
 }
 
@@ -209,7 +200,6 @@ function renderAttitude(s) {
   setText('val-rollrate', fmt.deg(s.roll_rate_dps));
   setText('val-pitchrate', fmt.deg(s.pitch_rate_dps));
   setText('val-yawrate', fmt.deg(s.yaw_rate_dps));
-  attTrail.pushSample(s.roll_deg || 0, s.pitch_deg || 0);
 }
 
 function renderGps(s) {
@@ -254,28 +244,32 @@ function renderBattery(s) {
   setText('val-bhealth', s.battery_health || 'UNKNOWN');
 
   const fill = document.getElementById('battery-fill');
-  fill.style.width = `${pct}%`;
-  fill.classList.toggle('low', pct < 30 && pct >= 15);
-  fill.classList.toggle('crit', pct < 15);
-
-  // 6-cell rendering
-  const cells = Math.round((pct / 100) * 6);
-  const cellsHost = document.getElementById('battery-cells');
-  if (cellsHost.childElementCount !== 6) {
-    cellsHost.innerHTML = '';
-    for (let i = 0; i < 6; i++) {
-      const d = document.createElement('div');
-      cellsHost.appendChild(d);
-    }
+  if (fill) {
+    fill.style.width = `${pct}%`;
+    fill.classList.toggle('low', pct < 30 && pct >= 15);
+    fill.classList.toggle('crit', pct < 15);
   }
-  [...cellsHost.children].forEach((c, i) => {
-    c.classList.remove('active', 'low', 'crit');
-    if (i < cells) {
-      if (pct < 15) c.classList.add('crit');
-      else if (pct < 30) c.classList.add('low');
-      else c.classList.add('active');
+
+  // 6-cell rendering (optional - host may be omitted in compact layouts)
+  const cellsHost = document.getElementById('battery-cells');
+  if (cellsHost) {
+    const cells = Math.round((pct / 100) * 6);
+    if (cellsHost.childElementCount !== 6) {
+      cellsHost.innerHTML = '';
+      for (let i = 0; i < 6; i++) {
+        const d = document.createElement('div');
+        cellsHost.appendChild(d);
+      }
     }
-  });
+    [...cellsHost.children].forEach((c, i) => {
+      c.classList.remove('active', 'low', 'crit');
+      if (i < cells) {
+        if (pct < 15) c.classList.add('crit');
+        else if (pct < 30) c.classList.add('low');
+        else c.classList.add('active');
+      }
+    });
+  }
 }
 
 function renderRadio(s) {
@@ -286,7 +280,6 @@ function renderRadio(s) {
   setText('val-rxerr', String(s.rxerrors || 0));
   setText('val-latency', s.latency_ms ? `${s.latency_ms} ms` : '—');
   setText('val-link', `Link ${s.link_quality || 0}%`);
-  rssiChart.push(s.rssi || 0);
 }
 
 function renderImu(s) {
@@ -303,9 +296,6 @@ function renderImu(s) {
 
 function renderBarometer(s) {
   setText('val-pressure', fmt.pressure(s.pressure_hpa));
-  setText('val-temp', fmt.temp(s.temperature_c));
-  setText('val-baro-alt', fmt.m(s.baro_alt_m));
-  baroChart.push(s.pressure_hpa || 0);
 }
 
 function renderMission(s) {

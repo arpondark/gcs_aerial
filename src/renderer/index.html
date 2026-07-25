@@ -9,18 +9,16 @@
   <body>
     <header class="topbar">
       <div class="brand">
-        <span class="brand-mark" aria-hidden="true"></span>
+        <span class="brand-mark" aria-hidden="true">U</span>
         <div>
-          <div class="brand-title">UIU Aerial Robotics GCP</div>
-          <div class="brand-sub">ArduPilot GCS · RFD900x</div>
+          <div class="brand-title">UIU Aerial Robotics</div>
+          <div class="brand-sub">Ground Control · RFD900x</div>
         </div>
       </div>
+
       <div class="connection">
         <label class="ctrl">Port
           <select id="port-select" aria-label="Serial port"></select>
-        </label>
-        <label class="ctrl">Manual
-          <input id="port-manual" type="text" placeholder="COM3" autocomplete="off" spellcheck="false" />
         </label>
         <label class="ctrl">Baud
           <select id="baud-select" aria-label="Baud rate">
@@ -34,202 +32,151 @@
         <button class="btn btn-secondary" id="refresh-ports">Rescan</button>
         <button class="btn btn-primary" id="connect-btn">Connect</button>
         <button class="btn btn-ghost" id="disconnect-btn" disabled>Disconnect</button>
-        <div class="conn-pill" id="conn-pill" data-state="offline">
-          <span class="conn-dot" aria-hidden="true"></span>
-          <span id="conn-status">Disconnected</span>
-        </div>
+      </div>
+
+      <div class="conn-pill" id="conn-pill" data-state="offline">
+        <span class="conn-dot" aria-hidden="true"></span>
+        <span id="conn-status">Disconnected</span>
       </div>
     </header>
 
-    <main class="grid">
-      <!-- ============ Row 1: Status strip + Attitude ============ -->
-      <section class="status-strip" aria-label="Flight Status">
-        <article class="status-card mode" id="card-mode">
-          <header>Mode</header>
-          <strong id="val-mode">—</strong>
-          <footer id="val-vehicle">—</footer>
-        </article>
-        <article class="status-card" id="card-armed">
-          <header>Armed</header>
-          <strong id="val-armed">—</strong>
-        </article>
-        <article class="status-card" id="card-vehicle">
-          <header>Status</header>
-          <strong id="val-status">—</strong>
-          <footer>MAV v<span id="val-mav">0</span></footer>
-        </article>
-        <article class="status-card" id="card-ekf">
-          <header>EKF</header>
-          <strong id="val-ekf">—</strong>
-        </article>
-        <article class="status-card" id="card-gps">
-          <header>GPS</header>
-          <strong id="val-fix">—</strong>
-          <footer><span id="val-sats">0</span> sats</footer>
-        </article>
-        <article class="status-card" id="card-failsafe">
-          <header>Failsafe</header>
-          <div class="fs-grid">
-            <span data-fs="battery">Bat</span>
-            <span data-fs="rc">RC</span>
-            <span data-fs="gps">GPS</span>
-          </div>
-        </article>
-        <article class="status-card mission" id="card-mission">
-          <header>Mission</header>
-          <strong id="val-mission">—</strong>
-          <footer>WP <span id="val-wp">0</span>/<span id="val-wp-total">0</span></footer>
-        </article>
-      </section>
+    <section class="status-strip" aria-label="Flight Status">
+      <article class="status-card" id="card-mode">
+        <span class="status-label">Mode</span>
+        <strong id="val-mode">—</strong>
+        <span class="status-foot" id="val-vehicle">—</span>
+      </article>
+      <article class="status-card" id="card-armed">
+        <span class="status-label">Armed</span>
+        <strong id="val-armed">—</strong>
+      </article>
+      <article class="status-card" id="card-vehicle">
+        <span class="status-label">Status</span>
+        <strong id="val-status">—</strong>
+        <span class="status-foot">MAV v<span id="val-mav">0</span></span>
+      </article>
+      <article class="status-card" id="card-ekf">
+        <span class="status-label">EKF</span>
+        <strong id="val-ekf">—</strong>
+      </article>
+      <article class="status-card" id="card-gps">
+        <span class="status-label">GPS</span>
+        <strong id="val-fix">—</strong>
+        <span class="status-foot"><span id="val-sats">0</span> sats</span>
+      </article>
+      <article class="status-card" id="card-failsafe">
+        <span class="status-label">Failsafe</span>
+        <div class="fs-grid">
+          <span data-fs="battery">Bat</span>
+          <span data-fs="rc">RC</span>
+          <span data-fs="gps">GPS</span>
+        </div>
+      </article>
+      <article class="status-card" id="card-mission">
+        <span class="status-label">Mission</span>
+        <strong id="val-mission">—</strong>
+        <span class="status-foot">WP <span id="val-wp">0</span>/<span id="val-wp-total">0</span></span>
+      </article>
+    </section>
 
-      <!-- ============ Row 1 right: Attitude / Horizon ============ -->
+    <main class="grid">
+      <!-- LEFT 50% — top: Attitude, bottom: GPS+Map -->
       <section class="panel panel-attitude">
         <header class="panel-header">
           <h2>Attitude</h2>
-          <div class="att-readout-inline">
-            <span><b>R</b><i id="val-roll">0.0°</i></span>
-            <span><b>P</b><i id="val-pitch">0.0°</i></span>
-            <span><b>Y</b><i id="val-yaw">0°</i></span>
-          </div>
+          <span class="panel-tag" id="val-fix-2">NO_GPS</span>
         </header>
         <div class="attitude-wrap">
           <canvas id="horizon" aria-label="Artificial horizon"></canvas>
-          <div class="attitude-readout">
-            <div><span class="lbl">R rate</span><span id="val-rollrate">0.0°/s</span></div>
-            <div><span class="lbl">P rate</span><span id="val-pitchrate">0.0°/s</span></div>
-            <div><span class="lbl">Y rate</span><span id="val-yawrate">0.0°/s</span></div>
+          <div class="att-readout">
+            <div><span>Roll</span><strong id="val-roll">0.0°</strong></div>
+            <div><span>Pitch</span><strong id="val-pitch">0.0°</strong></div>
+            <div><span>Yaw</span><strong id="val-yaw">0°</strong></div>
+            <div class="readout-divider"></div>
+            <div><span>R rate</span><strong id="val-rollrate">0°/s</strong></div>
+            <div><span>P rate</span><strong id="val-pitchrate">0°/s</strong></div>
+            <div><span>Y rate</span><strong id="val-yawrate">0°/s</strong></div>
           </div>
         </div>
       </section>
 
-      <!-- ============ Row 2: Map (large) ============ -->
       <section class="panel panel-map">
         <header class="panel-header">
-          <h2>Map & GPS</h2>
+          <h2>GPS &amp; Map</h2>
           <div class="map-toolbar">
             <select id="map-tile-source" aria-label="Tile source">
-              <option value="osm">OSM</option>
-              <option value="satellite">SAT</option>
+              <option value="osm">Street</option>
+              <option value="satellite">Satellite</option>
             </select>
-            <button class="btn btn-ghost map-btn" id="map-zoom-in">+</button>
-            <button class="btn btn-ghost map-btn" id="map-zoom-out">−</button>
-            <button class="btn btn-ghost map-btn" id="map-recenter">⌖</button>
-            <span class="panel-tag" id="val-fix-2">NO_GPS</span>
+            <button class="map-btn" id="map-zoom-in" title="Zoom in">+</button>
+            <button class="map-btn" id="map-zoom-out" title="Zoom out">−</button>
+            <button class="map-btn" id="map-recenter" title="Recenter">⌖</button>
           </div>
         </header>
         <div class="map-wrap">
           <canvas id="map" aria-label="Map"></canvas>
-          <div class="map-readout">
-            <div><span class="lbl">Lat</span><span id="val-lat">—</span></div>
-            <div><span class="lbl">Lon</span><span id="val-lon">—</span></div>
-            <div><span class="lbl">Alt (MSL)</span><span id="val-alt-msl">—</span></div>
-            <div><span class="lbl">Alt (Rel)</span><span id="val-alt-rel">—</span></div>
-            <div><span class="lbl">G spd</span><span id="val-gspeed">—</span></div>
-            <div><span class="lbl">A spd</span><span id="val-aspeed">—</span></div>
-            <div><span class="lbl">V/S</span><span id="val-vspeed">—</span></div>
-            <div><span class="lbl">HDG</span><span id="val-heading">—</span></div>
-            <div><span class="lbl">COG</span><span id="val-cog">—</span></div>
-            <div><span class="lbl">DOP</span><span id="val-dop">—</span></div>
-            <div><span class="lbl">Sats</span><span id="val-sats-2">—</span></div>
-            <div><span class="lbl">Acc</span><span id="val-gacc">—</span></div>
-            <div><span class="lbl">Home</span><span id="val-home">—</span></div>
-            <div><span class="lbl">Dist</span><span id="val-dist">—</span></div>
-            <div><span class="lbl">Brg</span><span id="val-bearing">—</span></div>
-            <div><span class="lbl">ETA</span><span id="val-eta">—</span></div>
-          </div>
         </div>
       </section>
 
-      <!-- ============ Row 3 left: Battery ============ -->
+      <!-- RIGHT 50% — top: Battery, middle: Telemetry/Radio, bottom: IMU + Baro + Mission -->
       <section class="panel panel-battery">
         <header class="panel-header">
           <h2>Battery</h2>
           <span class="panel-tag" id="val-batt-pct">0%</span>
         </header>
-        <div class="battery-row">
-          <div class="battery-bar">
-            <div class="battery-fill" id="battery-fill"></div>
-            <div class="battery-cells" id="battery-cells"></div>
-          </div>
-          <div class="battery-readout">
-            <div><span class="lbl">Volt</span><span id="val-volt">—</span></div>
-            <div><span class="lbl">Curr</span><span id="val-curr">—</span></div>
-            <div><span class="lbl">Rem</span><span id="val-remaining">—</span></div>
-            <div><span class="lbl">Used</span><span id="val-consumed">—</span></div>
-            <div><span class="lbl">Power</span><span id="val-power">—</span></div>
-            <div><span class="lbl">Temp</span><span id="val-btemp">—</span></div>
-            <div><span class="lbl">Time</span><span id="val-flight">—</span></div>
-            <div><span class="lbl">Health</span><span id="val-bhealth">—</span></div>
-          </div>
+        <div class="bar-mini">
+          <div class="bar-fill" id="battery-fill"></div>
+        </div>
+        <div class="info-grid">
+          <div class="info-cell"><span>Voltage</span><strong id="val-volt">—</strong></div>
+          <div class="info-cell"><span>Current</span><strong id="val-curr">—</strong></div>
+          <div class="info-cell"><span>Remaining</span><strong id="val-remaining">—</strong></div>
+          <div class="info-cell"><span>Consumed</span><strong id="val-consumed">—</strong></div>
+          <div class="info-cell"><span>Power</span><strong id="val-power">—</strong></div>
+          <div class="info-cell"><span>Temp</span><strong id="val-btemp">—</strong></div>
+          <div class="info-cell"><span>Flight left</span><strong id="val-flight">—</strong></div>
+          <div class="info-cell"><span>Health</span><strong id="val-bhealth">—</strong></div>
         </div>
       </section>
 
-      <!-- ============ Row 3 mid: Compass + Baro + IMU ============ -->
-      <section class="panel panel-compass">
+      <section class="panel panel-radio">
         <header class="panel-header">
-          <h2>Compass</h2>
-          <span class="panel-tag" id="val-compass-home">→ <span id="val-bearing-2">—</span></span>
+          <h2>Telemetry / Radio</h2>
+          <span class="panel-tag" id="val-link">Link 0%</span>
         </header>
-        <div class="compass-wrap">
-          <canvas id="compass" aria-label="Compass"></canvas>
-          <div class="compass-readout">
-            <strong id="val-compass">0°</strong>
-            <span class="lbl">Heading</span>
-          </div>
+        <div class="info-grid">
+          <div class="info-cell"><span>RSSI (air)</span><strong id="val-rssi">—</strong></div>
+          <div class="info-cell"><span>RSSI (gnd)</span><strong id="val-remrssi">—</strong></div>
+          <div class="info-cell"><span>Noise (air)</span><strong id="val-noise">—</strong></div>
+          <div class="info-cell"><span>Noise (gnd)</span><strong id="val-remnoise">—</strong></div>
+          <div class="info-cell"><span>RX errors</span><strong id="val-rxerr">—</strong></div>
+          <div class="info-cell"><span>Latency</span><strong id="val-latency">—</strong></div>
         </div>
-      </section>
-
-      <section class="panel panel-baro">
-        <header class="panel-header">
-          <h2>Baro</h2>
-          <span class="panel-tag">MSLP</span>
-        </header>
-        <div class="baro-grid">
-          <div class="gauge"><span class="lbl">Pressure</span><strong id="val-pressure">—</strong></div>
-          <div class="gauge"><span class="lbl">Temp</span><strong id="val-temp">—</strong></div>
-          <div class="gauge"><span class="lbl">Alt</span><strong id="val-baro-alt">—</strong></div>
-        </div>
-        <div class="chart-wrap chart-tall"><canvas id="chart-baro" aria-label="Pressure history"></canvas></div>
       </section>
 
       <section class="panel panel-imu">
         <header class="panel-header">
-          <h2>IMU</h2>
+          <h2>IMU + Compass</h2>
           <span class="panel-tag">X·Y·Z</span>
         </header>
-        <div class="imu-grid">
-          <div class="imu-row"><span class="imu-label">Accel m/s²</span><span class="imu-values" id="val-accel">—</span></div>
-          <div class="imu-row"><span class="imu-label">Gyro °/s</span><span class="imu-values" id="val-gyro">—</span></div>
-          <div class="imu-row"><span class="imu-label">Mag</span><span class="imu-values" id="val-mag">—</span></div>
-          <div class="imu-row"><span class="imu-label">Vibe</span><span class="imu-values" id="val-vibe">—</span></div>
-          <div class="imu-row"><span class="imu-label">Temp</span><span class="imu-values" id="val-imu-temp">—</span></div>
+        <div class="imu-row">
+          <div class="info-grid">
+            <div class="info-cell"><span>Accel</span><strong id="val-accel">—</strong></div>
+            <div class="info-cell"><span>Gyro</span><strong id="val-gyro">—</strong></div>
+            <div class="info-cell"><span>Mag</span><strong id="val-mag">—</strong></div>
+            <div class="info-cell"><span>Vibe</span><strong id="val-vibe">—</strong></div>
+            <div class="info-cell"><span>IMU temp</span><strong id="val-imu-temp">—</strong></div>
+            <div class="info-cell"><span>Pressure</span><strong id="val-pressure">—</strong></div>
+          </div>
+          <div class="compass-strip">
+            <canvas id="compass" aria-label="Compass"></canvas>
+            <div class="compass-readout">
+              <strong id="val-compass">0°</strong>
+              <span>Heading</span>
+              <small>Home → <span id="val-bearing-2">—</span></small>
+            </div>
+          </div>
         </div>
-      </section>
-
-      <!-- ============ Row 4 left: Radio ============ -->
-      <section class="panel panel-radio">
-        <header class="panel-header">
-          <h2>Radio / Link</h2>
-          <span class="panel-tag" id="val-link">0%</span>
-        </header>
-        <div class="radio-grid">
-          <div class="gauge"><span class="lbl">RSSI air</span><strong id="val-rssi">—</strong></div>
-          <div class="gauge"><span class="lbl">RSSI gnd</span><strong id="val-remrssi">—</strong></div>
-          <div class="gauge"><span class="lbl">Noise air</span><strong id="val-noise">—</strong></div>
-          <div class="gauge"><span class="lbl">Noise gnd</span><strong id="val-remnoise">—</strong></div>
-          <div class="gauge"><span class="lbl">RX err</span><strong id="val-rxerr">—</strong></div>
-          <div class="gauge"><span class="lbl">Latency</span><strong id="val-latency">—</strong></div>
-        </div>
-        <div class="chart-wrap"><canvas id="chart-rssi" aria-label="RSSI history"></canvas></div>
-      </section>
-
-      <!-- ============ Row 4 right: Attitude trail + Mission ============ -->
-      <section class="panel panel-att-trail">
-        <header class="panel-header">
-          <h2>Attitude Trail</h2>
-          <span class="panel-tag">roll/pitch</span>
-        </header>
-        <div class="chart-wrap chart-tall"><canvas id="chart-att" aria-label="Attitude history"></canvas></div>
       </section>
 
       <section class="panel panel-mission">
@@ -237,14 +184,16 @@
           <h2>Mission</h2>
           <span class="panel-tag" id="val-mission-state">Idle</span>
         </header>
-        <div class="mission-grid">
-          <div class="gauge"><span class="lbl">Cur WP</span><strong id="val-cwp">—</strong></div>
-          <div class="gauge"><span class="lbl">Total</span><strong id="val-twp">—</strong></div>
-          <div class="gauge"><span class="lbl">Dist next</span><strong id="val-dnext">—</strong></div>
-          <div class="gauge"><span class="lbl">ETA next</span><strong id="val-eta-wp">—</strong></div>
+        <div class="info-grid">
+          <div class="info-cell"><span>Current WP</span><strong id="val-cwp">—</strong></div>
+          <div class="info-cell"><span>Total WPs</span><strong id="val-twp">—</strong></div>
+          <div class="info-cell"><span>Dist next</span><strong id="val-dnext">—</strong></div>
+          <div class="info-cell"><span>ETA next</span><strong id="val-eta-wp">—</strong></div>
         </div>
-        <div class="mission-progress"><div id="mission-bar"></div></div>
-        <div class="mission-eta">Progress <strong id="val-progress">0%</strong> · elapsed <span id="val-mission-time">00:00</span></div>
+        <div class="bar-mini"><div class="bar-fill bar-success" id="mission-bar"></div></div>
+        <div class="status-foot mono">
+          Progress <strong id="val-progress">0%</strong> · elapsed <span id="val-mission-time">00:00</span>
+        </div>
       </section>
     </main>
 
