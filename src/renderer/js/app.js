@@ -46,7 +46,7 @@ async function refreshPorts() {
       setText(
         'diag',
         error
-          ? `Port scan failed: ${error}. Type the COM path manually or use MOCK.`
+          ? `Port scan failed: ${error}. Type the COM path manually.`
           : 'No serial ports found.',
       );
       return;
@@ -54,11 +54,9 @@ async function refreshPorts() {
     for (const p of ports) {
       const opt = document.createElement('option');
       opt.value = p.path;
-      const label = p.path === 'MOCK'
-        ? p.friendlyName
-        : p.friendlyName && p.friendlyName !== p.path
-          ? `${p.path} — ${p.friendlyName}${p.manufacturer ? ' (' + p.manufacturer + ')' : ''}`
-          : `${p.path}${p.manufacturer ? ' — ' + p.manufacturer : ''}`;
+      const label = p.friendlyName && p.friendlyName !== p.path
+        ? `${p.path} — ${p.friendlyName}${p.manufacturer ? ' (' + p.manufacturer + ')' : ''}`
+        : `${p.path}${p.manufacturer ? ' — ' + p.manufacturer : ''}`;
       opt.textContent = label;
       els.portSelect.appendChild(opt);
     }

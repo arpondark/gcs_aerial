@@ -121,13 +121,9 @@ ipcMain.handle('link:list', async () => {
   }
   const result = await SerialLink.list();
   console.log('[link:list] ok=' + result.ok + ' ports=' + (result.ports ? result.ports.length : 0) + (result.error ? ' error=' + result.error : ''));
-  // Always offer MOCK so the user can demo even without hardware.
   return {
     ok: result.ok,
-    ports: [
-      ...(result.ports || []),
-      { path: 'MOCK', friendlyName: 'MOCK — simulated MAVLink stream', manufacturer: 'UIU Aerial Robotics GCP' },
-    ],
+    ports: result.ports || [],
     error: result.error,
   };
 });
