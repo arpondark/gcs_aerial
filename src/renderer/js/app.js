@@ -39,6 +39,7 @@ const els = {
   offlineSource: document.getElementById('offline-source'),
   offlineUseDrone: document.getElementById('offline-use-drone'),
   offlineUseMap: document.getElementById('offline-use-map'),
+  offlineDownloadWorld: document.getElementById('offline-download-world'),
   offlineEstimate: document.getElementById('offline-estimate'),
   offlineStart: document.getElementById('offline-start'),
   offlineCancel: document.getElementById('offline-cancel'),
@@ -178,6 +179,131 @@ els.mapRecenter.addEventListener('click', () => {
     mapView.setCenter(lastSnapshot.lat, lastSnapshot.lon, { keepFollow: true });
   }
 });
+
+// Offline map controls
+if (els.mapOfflineBtn) {
+  els.mapOfflineBtn.addEventListener('click', () => {
+    if (els.offlinePanel) {
+      els.offlinePanel.hidden = !els.offlinePanel.hidden;
+      if (!els.offlinePanel.hidden) {
+        const center = mapView.getCenter();
+        if (center) {
+          if (els.offlineLat) els.offlineLat.value = center.lat.toFixed(4);
+          if (els.offlineLon) els.offlineLon.value = center.lon.toFixed(4);
+        }
+      }
+    }
+  });
+}
+
+if (els.mapQuickCache) {
+  els.mapQuickCache.addEventListener('click', async () => {
+    const bbox = mapView.getViewBbox();
+    if (!bbox || !api.downloadArea) return;
+    setText('diag', 'Caching current viewport for offline use...');
+    const res = await api.downloadArea({
+      mode: 'viewport',
+      source: mapView.getTileSource(),
+      zoom: mapView.zoom,
+      bbox,
+    });
+    if (res && res.ok) {
+      setText('diag', `Viewport caching started (Job: ${res.jobId})`);
+    } else {
+      setText('diag', `Viewport caching failed: ${(res && res.error) || 'unknown'}`);
+    }
+  });
+}
+
+if (els.offlineUseDrone) {
+  els.offlineUseDrone.addEventListener('click', () => {
+    if (lastSnapshot && lastSnapshot.lat != null && lastSnapshot.lon != null) {
+      if (els.offlineLat) els.offlineLat.value = lastSnapshot.lat.toFixed(4);
+      if (els.offlineLon) els.offlineLon.value = lastSnapshot.lon.toFixed(4);
+    }
+  });
+}
+
+if (els.offlineUseMap) {
+  els.offlineUseMap.addEventListener('click', () => {
+    const center = mapView.getCenter();
+    if (center) {
+      if (els.offlineLat) els.offlineLat.value = center.lat.toFixed(4);
+      if (els.offlineLon) els.offlineLon.value = center.lon.toFixed(4);
+    }
+  });
+}
+
+if (els.offlineRadius) {
+  els.offlineRadius.addEventListener('input', () => {
+    if (els.offlineRadiusValue) els.offlineRadiusValue.textContent = els.offlineRadius.value;
+  });
+}
+
+if (els.offlineDownloadWorld) {
+  els.offlineDownloadWorld.addEventListener('click', async () => {
+    if (!api.downloadArea) return;
+    if (els.offlineStatus) els.offlineStatus.textContent = 'Starting world map download (Zoom 0-6)...';
+    if (els.offlineProgress) els.offlineProgress.hidden = false;
+    const res = await api.downloadArea({
+      mode: 'world',
+      source: els.offlineSource ? els.offlineSource.value : 'osm',
+      minZoom: 0,
+      maxZoom: 6,
+    });
+    if (!res || !res.ok) {
+      if (els.offlineStatus) els.offlineStatus.textContent = `World download failed: ${(res && res.error) || 'unknown error'}`;
+    }
+  });
+}
+
+if (els.offlineStart) {
+  els.offlineStart.addEventListener('click', async () => {
+    if (!api.downloadArea) return;
+    const lat = parseFloat(els.offlineLat.value);
+    const lon = parseFloat(els.offlineLon.value);
+    const radiusKm = parseFloat(els.offlineRadius.value);
+    const minZoom = parseInt(els.offlineMinZoom.value, 10);
+    const maxZoom = parseInt(els.offlineMaxZoom.value, 10);
+    const source = els.offlineSource ? els.offlineSource.value : 'osm';
+
+    const res = await api.downloadArea({
+      center: { lat, lon },
+      radiusKm,
+      minZoom,
+      maxZoom,
+      source,
+    });
+    if (res && res.ok) {
+      if (els.offlineStatus) els.offlineStatus.textContent = `Download started (${res.totalTiles} tiles)...`;
+      if (els.offlineCancel) els.offlineCancel.disabled = false;
+    } else {
+      if (els.offlineStatus) els.offlineStatus.textContent = `Error: ${(res && res.error) || 'unknown error'}`;
+    }
+  });
+}
+
+if (els.offlineCancel) {
+  els.offlineCancel.addEventListener('click', async () => {
+    if (!api.cancelDownload) return;
+    await api.cancelDownload();
+    if (els.offlineStatus) els.offlineStatus.textContent = 'Cancelling download...';
+  });
+}
+
+if (api.onDownloadProgress) {
+  api.onDownloadProgress((p) => {
+    if (!p) return;
+    const isDone = p.state === 'completed' || p.state === 'cancelled' || p.state === 'failed';
+    if (els.offlineProgress) els.offlineProgress.hidden = isDone;
+    if (els.offlineCancel) els.offlineCancel.disabled = isDone;
+    if (els.offlineProgressFill) els.offlineProgressFill.style.width = `${p.percent.toFixed(1)}%`;
+    if (els.offlineProgressText) els.offlineProgressText.textContent = `${p.processedTiles}/${p.totalTiles} (${p.percent.toFixed(0)}%)`;
+    if (els.offlineStatus) {
+      els.offlineStatus.textContent = `Status: ${p.state.toUpperCase()} · ${p.processedTiles}/${p.totalTiles} tiles (${p.downloadedTiles} downloaded, ${p.cachedHits} cached, ${p.failedTiles} failed)`;
+    }
+  });
+}
 
 // ---- MP toolbar wiring ----
 els.mapOrientation.addEventListener('click', () => {

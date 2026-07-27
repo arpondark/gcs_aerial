@@ -516,34 +516,51 @@ export class MapView {
   async _maybeRequestTiles(force = false) {
     if (!this.api || !this.api.getMapTiles) return;
     if (!this.center) return;
+    if (force) this._failedTiles = null;
     const r = this._visibleTileRange();
     const key = `${this.tileSource}|${this.zoom}|${r.x0}|${r.y0}|${r.x1}|${r.y1}|${this.customUrlTemplate}`;
     if (!force && key === this._lastTileKey) return;
     this._lastTileKey = key;
 
-    // Build the visible tile list, but skip ones we already have in cache.
     const urls = [];
-    const wanted = []; // {x, y, url}
+    const maxZ = this.zoom;
+    const maxZVal = Math.pow(2, maxZ);
+
     for (let x = r.x0; x <= r.x1; x++) {
       for (let y = r.y0; y <= r.y1; y++) {
-        const url = this._tileUrl(x, y, this.zoom);
-        wanted.push({ x, y, url });
+        const url = this._tileUrl(x, y, maxZ);
         if (!this.tileCache.has(url) && !this._failedTiles?.has(url)) {
           urls.push(url);
         }
       }
     }
+
+    // Also fetch low-zoom world parent tiles (zoom 6) if missing so fallback renders immediately
+    if (maxZ > 6) {
+      const pz = 6;
+      const scale = Math.pow(2, maxZ - pz);
+      for (let x = r.x0; x <= r.x1; x += scale) {
+        for (let y = r.y0; y <= r.y1; y += scale) {
+          const wx = ((Math.floor(x) % maxZVal) + maxZVal) % maxZVal;
+          const wy = Math.max(0, Math.min(maxZVal - 1, Math.floor(y)));
+          const pxTile = Math.floor(wx / scale);
+          const pyTile = Math.floor(wy / scale);
+          const pUrl = this._tileUrl(pxTile, pyTile, pz);
+          if (!this.tileCache.has(pUrl) && !this._failedTiles?.has(pUrl) && !urls.includes(pUrl)) {
+            urls.push(pUrl);
+          }
+        }
+      }
+    }
+
     if (urls.length === 0 && !force) return;
 
     this.draw();
     try {
       const tiles = await this.api.getMapTiles(urls);
       if (!tiles || !tiles.length) return;
-      let loaded = 0;
       tiles.forEach((t) => {
         if (!t || !t.url || !t.dataUrl) {
-          // Mark transient failures so we don't hammer the network;
-          // they get retried after the next pan/zoom.
           if (t && t.url) {
             this._failedTiles = this._failedTiles || new Set();
             this._failedTiles.add(t.url);
@@ -554,7 +571,6 @@ export class MapView {
         img.onload = () => {
           this.tileCache.set(t.url, img);
           if (this._failedTiles) this._failedTiles.delete(t.url);
-          loaded++;
           this.draw();
         };
         img.onerror = () => {
@@ -567,16 +583,69 @@ export class MapView {
   }
 
   _tileUrl(x, y, z) {
+    const max = Math.pow(2, z);
+    const wrappedX = ((Math.floor(x) % max) + max) % max;
+    const clampedY = Math.max(0, Math.min(max - 1, Math.floor(y)));
     if (this.tileSource === 'custom' && this.customUrlTemplate) {
       const tpl = this.customUrlTemplate
         .replace('{z}', z)
-        .replace('{x}', x)
-        .replace('{y}', y)
-        .replace('{y_inv}', (Math.pow(2, z) - 1 - y));
+        .replace('{x}', wrappedX)
+        .replace('{y}', clampedY)
+        .replace('{y_inv}', (max - 1 - clampedY));
       return `custom://${tpl}`;
     }
-    if (this.tileSource === 'satellite') return `arcgis://sat/${z}/${y}/${x}`;
-    return `osm://${z}/${x}/${y}`;
+    if (this.tileSource === 'satellite') return `arcgis://sat/${z}/${clampedY}/${wrappedX}`;
+    return `osm://${z}/${wrappedX}/${clampedY}`;
+  }
+
+  _drawTiles(ctx, r) {
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    const ps = this.tilePixelSize;
+    const z = this.zoom;
+    const maxZ = Math.pow(2, z);
+
+    for (let x = r.x0; x <= r.x1; x++) {
+      for (let y = r.y0; y <= r.y1; y++) {
+        const url = this._tileUrl(x, y, z);
+        const img = this.tileCache.get(url);
+        const px = Math.round((x - r.cx) * ps + this._w / 2);
+        const py = Math.round((y - r.cy) * ps + this._h / 2);
+
+        if (img && img.complete && img.naturalWidth) {
+          ctx.drawImage(img, px, py, ps, ps);
+        } else {
+          // Fallback: draw lower zoom parent tile if current zoom tile isn't in cache
+          let parentDrawn = false;
+          const wx = ((Math.floor(x) % maxZ) + maxZ) % maxZ;
+          const wy = Math.max(0, Math.min(maxZ - 1, Math.floor(y)));
+
+          for (let pz = z - 1; pz >= Math.max(0, z - 8); pz--) {
+            const scale = Math.pow(2, z - pz);
+            const pxTile = Math.floor(wx / scale);
+            const pyTile = Math.floor(wy / scale);
+            const parentUrl = this._tileUrl(pxTile, pyTile, pz);
+            const parentImg = this.tileCache.get(parentUrl);
+            if (parentImg && parentImg.complete && parentImg.naturalWidth) {
+              const srcSize = parentImg.naturalWidth / scale;
+              const srcX = Math.floor((wx % scale) * srcSize);
+              const srcY = Math.floor((wy % scale) * srcSize);
+              ctx.drawImage(parentImg, srcX, srcY, srcSize, srcSize, px, py, ps, ps);
+              parentDrawn = true;
+              break;
+            }
+          }
+
+          if (!parentDrawn) {
+            ctx.fillStyle = '#0a1626';
+            ctx.fillRect(px, py, ps, ps);
+            ctx.strokeStyle = 'rgba(34, 211, 238, 0.06)';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(px + 0.5, py + 0.5, ps - 1, ps - 1);
+          }
+        }
+      }
+    }
   }
 
   // -------- Projection (screen pixels → world lon/lat) --------

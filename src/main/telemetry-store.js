@@ -29,6 +29,8 @@ const DEFAULTS = {
   vdop: 99,
   gps_accuracy_m: 0,
   home: { lat: 0, lon: 0, alt_m: 0 },
+  distance_to_home_m: 0,
+  bearing_to_home_deg: 0,
 
   // Attitude
   roll_deg: 0,

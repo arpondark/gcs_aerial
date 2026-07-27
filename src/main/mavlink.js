@@ -239,33 +239,33 @@ class MAVLink {
   }
 
   _sysStatus(p) {
-    if (p.length < 31) throw new Error('sys_status payload too short');
+    if (p.length < 19) throw new Error('sys_status payload too short');
     return {
       load: p.readUInt16LE(12) / 10,
       voltage_v: p.readUInt16LE(14) / 1000,
       current_a: p.readInt16LE(16) / 100,
       remaining_pct: p.readInt8(18),
-      drop_vcomm: p.readUInt16LE(19),
-      errors_comm: p.readUInt16LE(21),
-      errors_count1: p.readUInt16LE(23),
-      errors_count2: p.readUInt16LE(25),
-      errors_count3: p.readUInt16LE(27),
-      errors_count4: p.readUInt16LE(29),
+      drop_vcomm: p.length >= 21 ? p.readUInt16LE(19) : 0,
+      errors_comm: p.length >= 23 ? p.readUInt16LE(21) : 0,
+      errors_count1: p.length >= 25 ? p.readUInt16LE(23) : 0,
+      errors_count2: p.length >= 27 ? p.readUInt16LE(25) : 0,
+      errors_count3: p.length >= 29 ? p.readUInt16LE(27) : 0,
+      errors_count4: p.length >= 31 ? p.readUInt16LE(29) : 0,
     };
   }
 
   _gpsRaw(p) {
-    if (p.length < 30) throw new Error('gps_raw payload too short');
+    if (p.length < 27) throw new Error('gps_raw payload too short');
     return {
       fix: FIX[p[8]] || 'UNKNOWN',
-      sats: p[29],
+      sats: p.length >= 30 ? p[29] : 0,
       lat: p.readInt32LE(9) / 1e7,
       lon: p.readInt32LE(13) / 1e7,
       alt_mm: p.readInt32LE(17),
       eph: p.readUInt16LE(21) / 100,
       epv: p.readUInt16LE(23) / 100,
       vel_cm_s: p.readUInt16LE(25) / 100,
-      cog: p.readUInt16LE(27) / 100,
+      cog: p.length >= 29 ? p.readUInt16LE(27) / 100 : 0,
     };
   }
 
@@ -341,14 +341,14 @@ class MAVLink {
   }
 
   _vfrHud(p) {
-    if (p.length < 20) throw new Error('vfr_hud payload too short');
+    if (p.length < 16) throw new Error('vfr_hud payload too short');
     return {
       airspeed_m_s: p.readFloatLE(0),
       groundspeed_m_s: p.readFloatLE(4),
-      alt_m: p.readInt32LE(8),
+      alt_m: p.readFloatLE(8),
       climb_m_s: p.readFloatLE(12),
-      heading: p.readInt16LE(16),
-      throttle: p.readUInt16LE(18),
+      heading: p.length >= 18 ? p.readInt16LE(16) : 0,
+      throttle: p.length >= 20 ? p.readUInt16LE(18) : 0,
     };
   }
 

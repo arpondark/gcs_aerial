@@ -23,7 +23,7 @@ const {
  *   }
  */
 
-const MAX_TILES_PER_JOB = 25000;
+const MAX_TILES_PER_JOB = 35000;
 const MIN_RADIUS_KM = 0.5;
 const MAX_RADIUS_KM = 25;
 const DEFAULT_RADIUS_KM = 5;
@@ -134,10 +134,26 @@ function* enumerateViewport({ bbox, zoom, source }) {
   }
 }
 
+function* enumerateWorld({ minZoom = 0, maxZoom = 6, source = 'osm' }) {
+  for (let z = minZoom; z <= maxZoom; z++) {
+    const max = Math.pow(2, z);
+    for (let x = 0; x < max; x++) {
+      for (let y = 0; y < max; y++) {
+        yield { source, z, x, y };
+      }
+    }
+  }
+}
+
+function getIterator(input) {
+  if (input.mode === 'viewport') return enumerateViewport(input);
+  if (input.mode === 'world') return enumerateWorld(input);
+  return enumerateTiles(input);
+}
+
 function countTiles(input) {
   let n = 0;
-  const iter = input.mode === 'viewport' ? enumerateViewport(input) : enumerateTiles(input);
-  for (const _ of iter) n++;
+  for (const _ of getIterator(input)) n++;
   return n;
 }
 
@@ -162,6 +178,11 @@ class OfflineTileDownloadManager extends EventEmitter {
     if (!r || typeof r !== 'object') return { ok: false, error: 'invalid payload' };
     const source = r.source || 'osm';
     if (!SOURCES.includes(source)) return { ok: false, error: `unknown source: ${source}` };
+    if (r.mode === 'world') {
+      const minZoom = clamp(parseInt(r.minZoom, 10) || 0, MIN_ZOOM, MAX_ZOOM);
+      const maxZoom = clamp(parseInt(r.maxZoom, 10) || 6, minZoom, MAX_ZOOM);
+      return { ok: true, mode: 'world', source, minZoom, maxZoom };
+    }
     if (r.mode === 'viewport') {
       const z = parseInt(r.zoom, 10);
       if (!Number.isInteger(z) || z < MIN_ZOOM || z > MAX_ZOOM) return { ok: false, error: 'invalid zoom' };
@@ -210,7 +231,7 @@ class OfflineTileDownloadManager extends EventEmitter {
     }
 
     const jobId = `offline-${Date.now()}-${Math.floor(Math.random() * 1e6).toString(36)}`;
-    const iter = norm.mode === 'viewport' ? enumerateViewport(norm) : enumerateTiles(norm);
+    const iter = getIterator(norm);
     const iterArr = [...iter];
 
     const job = {

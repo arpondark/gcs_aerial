@@ -86,25 +86,57 @@ class TileCache {
     return path.join(this.root, sourceId, String(z), String(x), `${y}.json`);
   }
 
-  async read(sourceId, z, x, y) {
-    try {
-      const [buf, metaRaw] = await Promise.all([
-        fsp.readFile(this.keyPath(sourceId, z, x, y)),
-        fsp.readFile(this.metaPath(sourceId, z, x, y), 'utf8'),
-      ]);
-      const meta = JSON.parse(metaRaw);
-      if (!meta || typeof meta.contentType !== 'string' || !meta.contentType.startsWith('image/')) {
-        await this._invalidate(sourceId, z, x, y);
-        return null;
+  _getSearchPaths(sourceId, z, x, y) {
+    const relTile = path.join(sourceId, String(z), String(x), `${y}.tile`);
+    const relJson = path.join(sourceId, String(z), String(x), `${y}.json`);
+
+    const list = [
+      { tile: path.join(this.root, relTile), json: path.join(this.root, relJson) }
+    ];
+
+    const projectRoot = process.env.AEROGCS_PROJECT_ROOT || path.resolve(__dirname, '..', '..');
+    const fallbackRoots = [
+      projectRoot,
+      path.join(projectRoot, 'tiles', 'v1'),
+      path.join(projectRoot, 'tiles')
+    ];
+
+    for (const fRoot of fallbackRoots) {
+      const tPath = path.join(fRoot, relTile);
+      const jPath = path.join(fRoot, relJson);
+      if (tPath !== list[0].tile) {
+        list.push({ tile: tPath, json: jPath });
       }
-      if (!buf || buf.length === 0) {
-        await this._invalidate(sourceId, z, x, y);
-        return null;
-      }
-      return { buf, contentType: meta.contentType, downloadedAt: meta.downloadedAt || 0 };
-    } catch (_) {
-      return null;
     }
+    return list;
+  }
+
+  async read(sourceId, z, x, y) {
+    const candidates = this._getSearchPaths(sourceId, z, x, y);
+    for (const { tile: kPath, json: mPath } of candidates) {
+      try {
+        const buf = await fsp.readFile(kPath);
+        if (!buf || buf.length === 0) continue;
+
+        let contentType = 'image/png';
+        let downloadedAt = Date.now();
+        try {
+          const metaRaw = await fsp.readFile(mPath, 'utf8');
+          const meta = JSON.parse(metaRaw);
+          if (meta && typeof meta.contentType === 'string' && meta.contentType.startsWith('image/')) {
+            contentType = meta.contentType;
+            if (meta.downloadedAt) downloadedAt = meta.downloadedAt;
+          }
+        } catch (_) {
+          // Sidecar json might be omitted in offline bundles; default to image/png
+        }
+
+        return { buf, contentType, downloadedAt };
+      } catch (_) {
+        // Try next candidate
+      }
+    }
+    return null;
   }
 
   async _invalidate(sourceId, z, x, y) {
