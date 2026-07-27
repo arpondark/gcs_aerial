@@ -11,10 +11,15 @@
     "mock": "electron . --mock",
     "postinstall": "electron-rebuild -f -w serialport",
     "build": "electron-builder --win",
-    "build:portable": "electron-builder --win portable"
+    "build:win": "electron-builder --win",
+    "build:portable": "electron-builder --win portable",
+    "build:mac": "electron-builder --mac",
+    "build:linux": "electron-builder --linux",
+    "build:all": "electron-builder --win --mac --linux",
+    "release": "electron-builder --publish always"
   },
 
-  "author": "Arpon",
+  "author": "MD. Shazan Mahmud Arpon",
   "license": "MIT",
 
   "dependencies": {
@@ -59,6 +64,29 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "UIU Aerial Robotics GCP"
-    }
+    },
+
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ]
+    },
+
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb",
+        "zip"
+      ]
+    },
+
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "arpondark",
+        "repo": "gcs_aerial"
+      }
+    ]
   }
 }

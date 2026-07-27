@@ -60,6 +60,24 @@ When the window opens:
 If you don't have hardware handy, choose **`MOCK — simulated MAVLink
 stream`** in the port dropdown to see live panels immediately.
 
+## Build and release
+
+The package is configured for Windows, macOS, and Linux builds through
+`electron-builder`.
+
+```bash
+npm run build:win      # Windows installer
+npm run build:mac      # macOS dmg + zip
+npm run build:linux    # Linux AppImage + deb + zip
+npm run build:all      # run all configured targets on a suitable CI runner
+npm run release        # publish the artifacts to GitHub Releases
+```
+
+`npm run release` uses the GitHub Releases publish target in
+`package.json`. Set `GH_TOKEN` in the environment before publishing.
+For macOS and Linux artifacts, run the matching build on macOS or Linux
+CI runners.
+
 ## Real-time map
 
 The **GPS & Navigation** panel now hosts a full moving map (like
