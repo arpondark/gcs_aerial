@@ -121,13 +121,18 @@ class MockLink extends EventEmitter {
   }
 
   _globalPosition(t) {
-    // 28 bytes
+    // 28 bytes. Two phases: launch after t=4s, fly a slow circular survey
+    // at ~10 m/s. Before launch the drone sits on the ground at HOME so
+    // you can see a marker without a track fan-out.
+    const launched = t > 4;
+    const lat = 23.7806 + (launched ? 0.00005 * Math.sin(t * 0.25) : Math.sin(t * 0.05) * 0.000015);
+    const lon = 90.4074 + (launched ? 0.00005 * Math.cos(t * 0.25) : Math.cos(t * 0.05) * 0.000015);
     const p = Buffer.alloc(28);
     p.writeUInt32LE(Math.round(t * 1000), 0);
-    p.writeInt32LE(Math.round((23.7806 + Math.sin(t * 0.05) * 0.0008) * 1e7), 4);
-    p.writeInt32LE(Math.round((90.4074 + Math.cos(t * 0.05) * 0.0008) * 1e7), 8);
-    p.writeInt32LE(Math.round((50 + Math.sin(t * 0.2) * 10) * 1000), 12);
-    p.writeInt32LE(Math.round((20 + Math.sin(t * 0.2) * 8) * 1000), 16);
+    p.writeInt32LE(Math.round(lat * 1e7), 4);
+    p.writeInt32LE(Math.round(lon * 1e7), 8);
+    p.writeInt32LE(Math.round((launched ? 35 + Math.sin(t * 0.2) * 8 : 0) * 1000), 12);
+    p.writeInt32LE(Math.round((launched ? 18 + Math.cos(t * 0.2) * 6 : 0) * 1000), 16);
     p.writeInt16LE(Math.round(1450 + Math.sin(t) * 50), 20);
     p.writeInt16LE(Math.round(Math.cos(t) * 50), 22);
     p.writeInt16LE(Math.round(-Math.sin(t * 0.4) * 35), 24);

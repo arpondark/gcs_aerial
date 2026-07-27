@@ -2,6 +2,7 @@ import { fmt, setText, setState } from './format.js';
 import { Horizon } from './horizon.js';
 import { MapView } from './map.js';
 import { Compass } from './compass.js';
+import { serializeTrackKML, parseTrackFile } from './track-log.js';
 
 const api = window.aerogcs;
 
@@ -18,6 +19,33 @@ const els = {
   mapZoomIn: document.getElementById('map-zoom-in'),
   mapZoomOut: document.getElementById('map-zoom-out'),
   mapRecenter: document.getElementById('map-recenter'),
+  mapQuickCache: document.getElementById('map-quick-cache'),
+  mapOfflineBtn: document.getElementById('map-download-offline'),
+  mapOrientation: document.getElementById('map-orientation'),
+  mapSaveTrack: document.getElementById('map-save-track'),
+  mapLoadTrack: document.getElementById('map-load-track'),
+  mapCaptureTrack: document.getElementById('map-capture-track'),
+  mapRulerClear: document.getElementById('mp-ruler-clear'),
+  mapCtxMenu: document.getElementById('map-ctxmenu'),
+  mpLayerToggles: document.querySelectorAll('[data-map-layer]'),
+  mpTabs: document.querySelectorAll('[data-mp-tab]'),
+  offlinePanel: document.getElementById('offline-panel'),
+  offlineLat: document.getElementById('offline-lat'),
+  offlineLon: document.getElementById('offline-lon'),
+  offlineRadius: document.getElementById('offline-radius'),
+  offlineRadiusValue: document.getElementById('offline-radius-value'),
+  offlineMinZoom: document.getElementById('offline-min-zoom'),
+  offlineMaxZoom: document.getElementById('offline-max-zoom'),
+  offlineSource: document.getElementById('offline-source'),
+  offlineUseDrone: document.getElementById('offline-use-drone'),
+  offlineUseMap: document.getElementById('offline-use-map'),
+  offlineEstimate: document.getElementById('offline-estimate'),
+  offlineStart: document.getElementById('offline-start'),
+  offlineCancel: document.getElementById('offline-cancel'),
+  offlineProgress: document.getElementById('offline-progress'),
+  offlineProgressFill: document.getElementById('offline-progress-fill'),
+  offlineProgressText: document.getElementById('offline-progress-text'),
+  offlineStatus: document.getElementById('offline-status'),
 };
 
 const horizon = new Horizon(document.getElementById('horizon'));
@@ -145,9 +173,115 @@ els.mapZoomOut.addEventListener('click', () => mapView.setZoom(mapView.zoom - 1)
 els.mapRecenter.addEventListener('click', () => {
   if (lastSnapshot) {
     mapView.setFollow(true);
-    // setFollow(true) already re-syncs the smoothed center to the current
-    // position. Snap the visual center too so the next frame is correct.
-    mapView.center = { lat: lastSnapshot.lat, lon: lastSnapshot.lon };
+    // Sync the smoothed render-center so the next RAF tick paints at
+    // the vehicle, not at the panned-away position.
+    mapView.setCenter(lastSnapshot.lat, lastSnapshot.lon, { keepFollow: true });
+  }
+});
+
+// ---- MP toolbar wiring ----
+els.mapOrientation.addEventListener('click', () => {
+  const next = mapView.orientation === 'up' ? 'north' : 'up';
+  mapView.setOrientation(next);
+  els.mapOrientation.textContent = next === 'up' ? 'TRACK UP' : 'NORTH UP';
+  els.mapOrientation.classList.toggle('is-active', next === 'up');
+  const ol = document.getElementById('map-orientation-label');
+  if (ol) ol.textContent = next === 'up' ? 'Track Up' : 'North Up';
+});
+
+let _recordingTrack = false;
+els.mapCaptureTrack.addEventListener('click', () => {
+  _recordingTrack = !_recordingTrack;
+  els.mapCaptureTrack.classList.toggle('is-active', _recordingTrack);
+  els.mapCaptureTrack.textContent = _recordingTrack ? '■ Stop' : '● Track';
+});
+
+els.mapSaveTrack.addEventListener('click', async () => {
+  if (!api.trackLog) {
+    setText('diag', 'Track log IPC unavailable.');
+    return;
+  }
+  const track = mapView.getTrack();
+  if (!track.length) { setText('diag', 'Track is empty.'); return; }
+  const payload = {
+    format: 'kml',
+    name: `track-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}`,
+    kml: serializeTrackKML(track, mapView.home, mapView.missionWaypoints),
+  };
+  const res = await api.trackLog.save(payload);
+  setText('diag', res && res.ok ? `Saved track: ${res.file}` : `Track save failed: ${(res && res.error) || 'unknown'}`);
+});
+
+els.mapLoadTrack.addEventListener('click', async () => {
+  if (!api.trackLog) return;
+  const res = await api.trackLog.load();
+  if (!res || !res.ok) return;
+  try {
+    const parsed = parseTrackFile(res.format, res.content);
+    if (parsed.track && parsed.track.length) {
+      mapView.setTrack(parsed.track);
+      setText('diag', `Loaded ${parsed.track.length} track points.`);
+    } else {
+      setText('diag', 'Loaded file had no track points.');
+    }
+  } catch (err) {
+    setText('diag', `Track load error: ${err.message}`);
+  }
+});
+
+els.mapRulerClear.addEventListener('click', () => mapView.clearRuler());
+
+// Layer toggles
+els.mpLayerToggles.forEach((btn) => {
+  btn.addEventListener('click', () => {
+    const name = btn.dataset.mapLayer;
+    const active = !btn.classList.contains('is-active');
+    btn.classList.toggle('is-active', active);
+    mapView.setLayer(name, active);
+  });
+});
+
+// Side tabs (purely visual for now — Mission Planner–style chrome)
+els.mpTabs.forEach((btn) => {
+  btn.addEventListener('click', () => {
+    els.mpTabs.forEach((b) => b.classList.remove('is-active'));
+    btn.classList.add('is-active');
+  });
+});
+
+// Context menu actions
+els.mapCtxMenu.querySelectorAll('button').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    const action = btn.dataset.ctxAction;
+    if (action === 'cancel' || action === 'fly-to') {
+      mapView.hideContextMenu();
+      return;
+    }
+    if (action === 'set-home') {
+      mapView.setHomeAtCursor();
+      if (lastSnapshot) lastSnapshot.home = mapView.home;
+    } else if (action === 'center') {
+      const c = mapView.getContextMenuCoords();
+      if (c) { mapView.setCenter(c.lat, c.lon); mapView.draw(); }
+    } else if (action === 'add-waypoint') {
+      const wp = mapView.addWaypointAtCursor();
+      if (wp) _missionWaypoints = [..._missionWaypoints, wp];
+    } else if (action === 'ruler') {
+      mapView.setLayer('ruler', true);
+      // Activate matching toggle button
+      const t = document.querySelector('[data-map-layer="ruler"]');
+      if (t) t.classList.add('is-active');
+      const coords = mapView.getContextMenuCoords();
+      if (coords) { mapView._ruler.start = coords; mapView._updateRulerHud?.(); }
+    }
+    mapView.hideContextMenu();
+  });
+});
+
+// Hide ctxmenu on outside click
+document.addEventListener('click', (e) => {
+  if (els.mapCtxMenu && !els.mapCtxMenu.contains(e.target) && !els.mapCtxMenu.hidden) {
+    mapView.hideContextMenu();
   }
 });
 
@@ -365,6 +499,7 @@ function render(s) {
   safe('radio', renderRadio);
   safe('imu', renderImu);
   safe('mission', renderMission);
+  safe('mapHud', renderMapHud);
 
   const age = lastHeartbeatMs ? Date.now() - lastHeartbeatMs : Infinity;
   setText('diag', `Packets: ${s.packet_count || 0} · Last HB: ${age > 9999 ? '—' : age + 'ms'} · V: ${fmt.num(s.battery_voltage_v, 2)}V · RSSI: ${s.rssi ?? '—'} · Session: ${fmt.ms_time(Date.now() - missionStartMs)}`);
@@ -410,6 +545,33 @@ function _refreshMissionHighlight() {
   }
   const decorated = _missionWaypoints.map((w, i) => ({ ...w, index: i === _currentWpIndex ? i : -1 }));
   mapView.setMissionWaypoints(decorated);
+}
+
+// Populate the MP HUD blocks (right column) and the bottom-right compass.
+function renderMapHud(s) {
+  setText('hud-mode', s.flight_mode || '—');
+  setText('hud-armed', s.armed ? 'ARMED' : 'DISARMED');
+  setText('hud-batt',
+    s.battery_voltage_v > 0 ? `${fmt.num(s.battery_voltage_v, 2)}V · ${Math.round(Math.max(0, Math.min(100, s.battery_remaining_pct || 0)))}%` : '—');
+  setText('hud-link', `${s.link_quality || 0}%${s.rssi != null ? ` · ${s.rssi}dBm` : ''}`);
+  setText('hud-gps', `${s.gps_fix || 'NO_GPS'} · ${s.sats || 0}s`);
+
+  setText('hud-lat', s.lat != null ? `${s.lat.toFixed(6)}°` : '—');
+  setText('hud-lon', s.lon != null ? `${s.lon.toFixed(6)}°` : '—');
+  setText('hud-alt', s.alt_rel_m != null ? `${fmt.num(s.alt_rel_m, 1)} m` : '—');
+  setText('hud-alt-abs', s.alt_msl_m != null ? `${fmt.num(s.alt_msl_m, 1)} m` : '—');
+  setText('hud-speed', s.ground_speed_m_s != null ? `${fmt.num(s.ground_speed_m_s, 1)} m/s` : '—');
+  setText('hud-heading', `${fmt.int(s.heading_deg || 0)}°`);
+
+  const compassHdg = document.getElementById('mp-compass-hdg');
+  if (compassHdg) compassHdg.textContent = `${fmt.int(s.heading_deg || 0)}°`;
+  const rose = document.getElementById('mp-compass-rose');
+  if (rose) {
+    const rot = -((s.heading_deg || 0));
+    // Use the rendered heading for buttery-smooth compass motion.
+    const rendered = mapView._renderHeading ?? s.heading_deg ?? 0;
+    rose.style.transform = `rotate(${(-rendered).toFixed(2)}deg)`;
+  }
 }
 
 api.onAdsb((list) => {

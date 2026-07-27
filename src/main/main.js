@@ -8,7 +8,9 @@ const MAVLink = require('./mavlink');
 const TelemetryStore = require('./telemetry-store');
 const SerialLink = require('./serial-link');
 const MockLink = require('./mock-link');
-const TileFetcher = require('./tile-fetcher');
+const { TileFetcher, TileCache } = require('./tile-fetcher');
+const { OfflineTileDownloadManager } = require('./offline-tile-download-manager');
+const { registerTrackLogIpc } = require('./track-log');
 
 const isMock = process.argv.includes('--mock');
 const isDev = process.argv.includes('--enable-logging');
@@ -17,6 +19,16 @@ let mainWindow = null;
 let link = null;
 const telemetry = new TelemetryStore();
 const mavlink = new MAVLink({ onMessage: (msg) => telemetry.apply(msg) });
+
+const tileCacheRoot = TileCache.defaultRoot(app);
+const tileFetcher = new TileFetcher(tileCacheRoot);
+const offlineDownload = new OfflineTileDownloadManager(tileFetcher);
+
+offlineDownload.on('progress', (payload) => {
+  if (mainWindow && !mainWindow.isDestroyed() && mainWindow.webContents) {
+    mainWindow.webContents.send('map:downloadProgress', payload);
+  }
+});
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -106,6 +118,7 @@ function setMenu() {
 async function init() {
   setMenu();
   mainWindow = createWindow();
+  registerTrackLogIpc();
   await app.whenReady();
 }
 
@@ -182,10 +195,43 @@ ipcMain.handle('link:write', async (_evt, bytes) => {
 
 ipcMain.handle('map:getTiles', async (_evt, urls) => {
   try {
-    const tiles = await TileFetcher.fetchTiles(urls || []);
+    const tiles = await tileFetcher.fetchTiles(urls || []);
     return tiles;
   } catch (err) {
     return [];
+  }
+});
+
+ipcMain.handle('map:estimateDownload', async (_evt, payload) => {
+  try {
+    return offlineDownload.estimate(payload || {});
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('map:downloadArea', async (_evt, payload) => {
+  try {
+    const res = await offlineDownload.start(payload || {});
+    return res;
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('map:cancelDownload', async (_evt, jobId) => {
+  try {
+    return offlineDownload.cancel(jobId);
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('map:downloadStatus', async () => {
+  try {
+    return offlineDownload.status();
+  } catch (err) {
+    return null;
   }
 });
 
@@ -221,6 +267,7 @@ app.whenReady().then(init).catch((err) => {
 
 app.on('window-all-closed', async () => {
   if (link) await link.close().catch(() => {});
+  await offlineDownload.shutdown().catch(() => {});
   if (process.platform !== 'darwin') app.quit();
 });
 

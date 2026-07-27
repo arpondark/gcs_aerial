@@ -11,6 +11,20 @@ contextBridge.exposeInMainWorld('aerogcs', {
   saveLog: (name, payload) => ipcRenderer.invoke('log:save', name, payload),
   info: () => ipcRenderer.invoke('app:info'),
   getMapTiles: (urls) => ipcRenderer.invoke('map:getTiles', urls),
+  estimateMapDownload: (payload) => ipcRenderer.invoke('map:estimateDownload', payload),
+  downloadMapArea: (payload) => ipcRenderer.invoke('map:downloadArea', payload),
+  cancelMapDownload: (jobId) => ipcRenderer.invoke('map:cancelDownload', jobId),
+  getMapDownloadStatus: () => ipcRenderer.invoke('map:downloadStatus'),
+  onMapDownloadProgress: (cb) => {
+    const handler = (_evt, payload) => cb(payload);
+    ipcRenderer.on('map:downloadProgress', handler);
+    return () => ipcRenderer.removeListener('map:downloadProgress', handler);
+  },
+
+  trackLog: {
+    save: (payload) => ipcRenderer.invoke('trackLog:save', payload),
+    load: () => ipcRenderer.invoke('trackLog:load'),
+  },
 
   onTelemetry: (cb) => {
     const handler = (_evt, snapshot) => cb(snapshot);
