@@ -3,6 +3,7 @@ import { Horizon } from './horizon.js';
 import { MapView } from './map.js';
 import { Compass } from './compass.js';
 import { serializeTrackKML, parseTrackFile } from './track-log.js';
+import { VoltGauge } from './gauge.js';
 
 const api = window.aerogcs;
 
@@ -54,6 +55,9 @@ const mapView = new MapView(document.getElementById('map'), { api });
 // compass still references its canvas, but we no longer render it; keep null-safe
 const compassCanvas = document.getElementById('compass');
 const compass = compassCanvas ? new Compass(compassCanvas) : null;
+
+const gaugeCanvas = document.getElementById('battery-volt-gauge');
+const voltGauge = gaugeCanvas ? new VoltGauge(gaugeCanvas, { min: 0, max: 27 }) : null;
 
 let lastSnapshot = null;
 let lastHeartbeatMs = 0;
@@ -518,6 +522,10 @@ function renderBattery(s) {
   setText('val-btemp', fmt.temp(s.battery_temp_c));
   setText('val-flight', s.flight_time_remaining_min ? `${s.flight_time_remaining_min} min` : '—');
   setText('val-bhealth', s.battery_health || 'UNKNOWN');
+
+  if (voltGauge && s.battery_voltage_v > 0) {
+    voltGauge.setValue(s.battery_voltage_v);
+  }
 
   // Voltage bar (orange in reference)
   const fill = document.getElementById('battery-fill');

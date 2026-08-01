@@ -34,10 +34,10 @@
       <article class="status-card mode" id="card-mode">
         <span class="status-label">Flight Mode</span>
         <div class="status-line">
-          <strong id="val-mode">—</strong>
+          <strong id="val-mode">UNKNOWN</strong>
           <span class="status-dot" aria-hidden="true"></span>
         </div>
-        <span class="status-foot" id="val-vehicle">—</span>
+        <span class="status-foot" id="val-vehicle">UNKNOWN</span>
       </article>
       <article class="status-card" id="card-armed">
         <span class="status-label">Armed</span>
@@ -47,7 +47,7 @@
       <article class="status-card gps" id="card-gps">
         <span class="status-label">GPS Fix</span>
         <div class="status-line">
-          <strong id="val-fix">—</strong>
+          <strong id="val-fix">No_GPS</strong>
         </div>
         <span class="status-foot"><span id="val-sats">0</span> sats · HDOP <span id="val-hdop-mini">—</span></span>
       </article>
@@ -56,371 +56,329 @@
         <div class="status-line">
           <strong id="val-volt-mini">—</strong>
         </div>
-        <span class="status-foot"><span id="val-batt-pct">0</span>%</span>
+        <span class="status-foot">—</span>
       </article>
       <article class="status-card datalink" id="card-datalink">
         <span class="status-label">Datalink</span>
         <div class="status-line">
-          <strong id="val-link-mini">—</strong>
+          <strong id="val-link-mini">0%</strong>
         </div>
-        <span class="status-foot"><span id="val-rssi-mini">—</span></span>
+        <span class="status-foot"><span id="val-rssi-mini">—</span> dBm</span>
       </article>
     </section>
 
     <main class="grid">
-      <!-- LEFT 60% — top: Attitude, bottom: GPS+Map -->
-      <section class="panel panel-attitude">
-        <header class="panel-header">
-          <h2>Attitude</h2>
-          <span class="panel-tag" id="val-fix-2">NO_GPS</span>
-        </header>
-        <div class="attitude-wrap">
-          <div class="artificial-horizon" id="horizon-host">
-            <canvas id="horizon" aria-label="Artificial horizon"></canvas>
-            <div class="hud-overlay">
-              <div class="hud-corner top-left">
-                <div class="hud-label">Airspeed</div>
-                <div class="hud-value"><strong id="val-airspeed">0.0</strong><span class="hud-unit">m/s</span></div>
-              </div>
-              <div class="hud-corner top-right">
-                <div class="hud-label">Altitude</div>
-                <div class="hud-value"><strong id="val-alt-big">0.0</strong><span class="hud-unit">m</span></div>
-              </div>
-              <div class="hud-corner bottom-center">
-                <div class="hud-label">Heading</div>
-                <div class="hud-value"><strong id="val-heading-big">0°</strong><span class="hud-unit" id="val-heading-cardinal">N</span></div>
-              </div>
-            </div>
-          </div>
-          <div class="att-readout">
-            <div><span>Roll</span><strong id="val-roll">0.0°</strong></div>
-            <div><span>Pitch</span><strong id="val-pitch">0.0°</strong></div>
-            <div><span>Yaw</span><strong id="val-yaw">0°</strong></div>
-            <div class="readout-divider"></div>
-            <div><span>R rate</span><strong id="val-rollrate">0°/s</strong></div>
-            <div><span>P rate</span><strong id="val-pitchrate">0°/s</strong></div>
-            <div><span>Y rate</span><strong id="val-yawrate">0°/s</strong></div>
-            <div class="readout-divider"></div>
-            <div><span>Altitude</span><strong id="val-alt-readout">0.00 m</strong></div>
-            <div><span>GroundSpeed</span><strong id="val-gspeed">0.00 m/s</strong></div>
-            <div><span>V Speed</span><strong id="val-vspeed">0.00 m/s</strong></div>
-            <div class="readout-divider"></div>
-            <div><span>Dist to WP</span><strong id="val-dwp">—</strong></div>
-            <div><span>Dist to MAV</span><strong id="val-dmav">—</strong></div>
-            <div><span>Heading</span><strong id="val-heading-readout">0°</strong></div>
-          </div>
-        </div>
-      </section>
-
-      <section class="panel panel-map">
-        <header class="panel-header mp-panel-header">
-          <h2>Flight Data — Moving Map</h2>
-          <div class="map-toolbar" role="toolbar" aria-label="Mission Planner map toolbar">
-            <button class="mp-tool-btn" id="map-capture-track" type="button" title="Start/stop recording track">● Track</button>
-            <button class="mp-tool-btn" id="map-load-track" type="button" title="Load KML or GPX track">Load</button>
-            <button class="mp-tool-btn" id="map-save-track" type="button" title="Save track as KML">Save</button>
-            <span class="mp-toolbar-sep" aria-hidden="true"></span>
-            <select id="map-tile-source" aria-label="Tile source">
-              <option value="osm">Map</option>
-              <option value="satellite">Satellite</option>
-            </select>
-            <button class="map-btn" id="map-zoom-in" title="Zoom in">+</button>
-            <button class="map-btn" id="map-zoom-out" title="Zoom out">−</button>
-            <button class="map-btn" id="map-recenter" title="Center on vehicle">⌖</button>
-            <button class="mp-tool-btn is-active" id="map-orientation" type="button" title="Toggle North Up / Track Up">NORTH UP</button>
-            <button class="map-btn" id="map-quick-cache" title="Cache current viewport for offline use">⤓</button>
-            <button class="map-btn" id="map-download-offline" title="Download map area for offline use">⇩</button>
-          </div>
-        </header>
-        <div class="mp-layerbar" role="toolbar" aria-label="Map layers">
-          <span class="mp-layerbar-title">Overlays</span>
-          <button class="mp-layer-toggle is-active" data-map-layer="track" type="button">Track</button>
-          <button class="mp-layer-toggle is-active" data-map-layer="home" type="button">Home</button>
-          <button class="mp-layer-toggle is-active" data-map-layer="mission" type="button">Mission</button>
-          <button class="mp-layer-toggle" data-map-layer="wind" type="button">Wind</button>
-          <button class="mp-layer-toggle is-active" data-map-layer="adsb" type="button">ADSB</button>
-          <button class="mp-layer-toggle is-active" data-map-layer="geofence" type="button">Fence</button>
-          <button class="mp-layer-toggle" data-map-layer="ruler" type="button">Ruler</button>
-          <span class="mp-layer-status"><span id="map-orientation-label">North Up</span> · Z<span id="map-zoom-label">16</span></span>
-        </div>
-        <div class="offline-panel" id="offline-panel" hidden>
-          <div class="offline-grid">
-            <label class="offline-field">
-              <span>Center lat</span>
-              <input type="number" id="offline-lat" step="0.0001" />
-            </label>
-            <label class="offline-field">
-              <span>Center lon</span>
-              <input type="number" id="offline-lon" step="0.0001" />
-            </label>
-            <div class="offline-shortcuts">
-              <button class="btn btn-ghost" id="offline-use-drone" type="button">Use drone</button>
-              <button class="btn btn-ghost" id="offline-use-map" type="button">Use map center</button>
-              <button class="btn btn-ghost" id="offline-download-world" type="button" title="Download all world map tiles for offline use">Download World Map</button>
-            </div>
-            <label class="offline-field offline-wide">
-              <span>Radius: <strong id="offline-radius-value">5</strong> km</span>
-              <input type="range" id="offline-radius" min="0.5" max="25" step="0.5" value="5" />
-            </label>
-            <label class="offline-field">
-              <span>Min zoom</span>
-              <input type="number" id="offline-min-zoom" min="0" max="19" value="10" />
-            </label>
-            <label class="offline-field">
-              <span>Max zoom</span>
-              <input type="number" id="offline-max-zoom" min="0" max="19" value="17" />
-            </label>
-            <label class="offline-field">
-              <span>Source</span>
-              <select id="offline-source">
-                <option value="osm">Street (OSM)</option>
-                <option value="satellite">Satellite (ArcGIS)</option>
-              </select>
-            </label>
-            <div class="offline-estimate offline-wide" id="offline-estimate">Estimate: enter values</div>
-            <div class="offline-actions offline-wide">
-              <button class="btn btn-primary" id="offline-start" type="button">Start</button>
-              <button class="btn btn-ghost" id="offline-cancel" type="button" disabled>Cancel</button>
-            </div>
-            <div class="offline-progress offline-wide" id="offline-progress" hidden>
-              <div class="bar-mini"><div class="bar-fill" id="offline-progress-fill"></div></div>
-              <div class="offline-progress-text" id="offline-progress-text">Idle</div>
-            </div>
-            <div class="offline-status offline-wide" id="offline-status" role="status"></div>
-          </div>
-        </div>
-        <div class="map-wrap mp-map-wrap">
-          <aside class="mp-tabs" aria-label="Mission Planner side tabs">
-            <button class="mp-tab is-active" data-mp-tab="layers" title="Layers" type="button">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6l9-3 9 3-9 3-9-3zm0 6l9 3 9-3M3 18l9 3 9-3"/></svg>
-            </button>
-            <button class="mp-tab" data-mp-tab="mission" title="Mission" type="button">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3v18h2v-7h7l3 7h2V3l-3 7H7V3H5z"/></svg>
-            </button>
-            <button class="mp-tab" data-mp-tab="wind" title="Wind" type="button">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8h11a3 3 0 1 0-3-3M3 16h15a3 3 0 1 1-3 3"/></svg>
-            </button>
-            <button class="mp-tab" data-mp-tab="track" title="Track" type="button">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17l6-6 4 4 8-9"/></svg>
-            </button>
-            <button class="mp-tab" data-mp-tab="camera" title="Camera" type="button">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h3l2-2h4l2 2h3v12H5z"/><circle cx="12" cy="13" r="3.5"/></svg>
-            </button>
-            <button class="mp-tab" data-mp-tab="settings" title="Settings" type="button">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.5-2-3.5-2.4.9a7 7 0 0 0-2-1.2L14 3h-4l-.5 2.5a7 7 0 0 0-2 1.2l-2.4-.9-2 3.5 2 1.5A7 7 0 0 0 5 12c0 .4 0 .8.1 1.2l-2 1.5 2 3.5 2.4-.9a7 7 0 0 0 2 1.2L10 21h4l.5-2.5a7 7 0 0 0 2-1.2l2.4.9 2-3.5-2-1.5c0-.4.1-.8.1-1.2z"/></svg>
-            </button>
-          </aside>
-
-          <div class="mp-canvas-area">
-            <canvas id="map" aria-label="Map"></canvas>
-
-            <div class="mp-hud-right" id="mp-hud" aria-label="Telemetry HUD">
-              <section class="mp-hud-block">
-                <header>Vehicle</header>
-                <div class="mp-hud-row"><span>Mode</span><strong id="hud-mode">—</strong></div>
-                <div class="mp-hud-row"><span>Armed</span><strong id="hud-armed">—</strong></div>
-                <div class="mp-hud-row"><span>Battery</span><strong id="hud-batt">—</strong></div>
-                <div class="mp-hud-row"><span>Link</span><strong id="hud-link">—</strong></div>
-                <div class="mp-hud-row"><span>GPS</span><strong id="hud-gps">—</strong></div>
-              </section>
-              <section class="mp-hud-block">
-                <header>Position</header>
-                <div class="mp-hud-row"><span>Lat</span><strong id="hud-lat">—</strong></div>
-                <div class="mp-hud-row"><span>Lon</span><strong id="hud-lon">—</strong></div>
-                <div class="mp-hud-row"><span>Alt (rel)</span><strong id="hud-alt">—</strong></div>
-                <div class="mp-hud-row"><span>Alt (abs)</span><strong id="hud-alt-abs">—</strong></div>
-                <div class="mp-hud-row"><span>Speed</span><strong id="hud-speed">—</strong></div>
-                <div class="mp-hud-row"><span>Heading</span><strong id="hud-heading">—</strong></div>
-              </section>
-              <section class="mp-hud-block" id="hud-cursor-block">
-                <header>Cursor</header>
-                <div class="mp-hud-row"><span>Lat</span><strong id="hud-cursor-lat">—</strong></div>
-                <div class="mp-hud-row"><span>Lon</span><strong id="hud-cursor-lon">—</strong></div>
-                <div class="mp-hud-row"><span>From vehicle</span><strong id="hud-cursor-dist">—</strong></div>
-                <div class="mp-hud-row"><span>Bearing</span><strong id="hud-cursor-bear">—</strong></div>
-              </section>
-            </div>
-
-            <div class="mp-compass" id="mp-compass" aria-label="Compass rose">
-              <div class="mp-compass-rose" id="mp-compass-rose">
-                <span class="mp-compass-n">N</span>
-                <span class="mp-compass-e">E</span>
-                <span class="mp-compass-s">S</span>
-                <span class="mp-compass-w">W</span>
-                <div class="mp-compass-hdg" id="mp-compass-hdg">0°</div>
-              </div>
-            </div>
-
-            <div class="mp-ruler-readout" id="mp-ruler-readout" hidden>
-              <span class="mp-ruler-label">Ruler</span>
-              <span id="mp-ruler-dist">—</span>
-              <span id="mp-ruler-bear">—</span>
-              <button id="mp-ruler-clear" type="button" title="Clear ruler">✕</button>
-            </div>
-
-            <div class="mp-ctxmenu" id="map-ctxmenu" hidden role="menu">
-              <button data-ctx-action="set-home" type="button" role="menuitem">Set Home Here</button>
-              <button data-ctx-action="center" type="button" role="menuitem">Center Map Here</button>
-              <button data-ctx-action="fly-to" type="button" role="menuitem">Fly To Here</button>
-              <button data-ctx-action="add-waypoint" type="button" role="menuitem">Add Waypoint</button>
-              <button data-ctx-action="ruler" type="button" role="menuitem">Measure From Here</button>
-              <button data-ctx-action="cancel" type="button" role="menuitem">Cancel</button>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- RIGHT 40% — 4 stacked sub-panels -->
-      <aside class="right-stack">
-        <!-- Battery -->
-        <section class="panel panel-battery">
+      <!-- Column 1: Attitude (top) + Inertial Sensors (bottom) -->
+      <div class="col col-left">
+        <section class="panel panel-attitude">
           <header class="panel-header">
-            <h2>Battery Analytics</h2>
-            <span class="panel-tag"><span id="val-batt-pct-2">0</span>%</span>
+            <h2>Attitude</h2>
+            <span class="panel-tag" id="val-fix-2">NO_GPS</span>
           </header>
-          <div class="panel-body">
-            <div class="battery-row">
-              <div class="battery-stat">
-                <span class="sub-label">Total Voltage</span>
-                <strong class="sub-value" id="val-volt">—</strong>
-                <div class="bar-mini"><div class="bar-fill bar-orange" id="battery-fill"></div></div>
-              </div>
-              <div class="battery-stat">
-                <span class="sub-label">Current Draw</span>
-                <strong class="sub-value" id="val-curr">—</strong>
-                <span class="sub-mini" id="val-power">—</span>
+          <div class="attitude-wrap">
+            <div class="artificial-horizon" id="horizon-host">
+              <canvas id="horizon" aria-label="Artificial horizon"></canvas>
+              <div class="hud-overlay">
+                <div class="hud-corner top-left">
+                  <div class="hud-label">Airspeed</div>
+                  <div class="hud-value"><strong id="val-airspeed">0.0</strong><span class="hud-unit">m/s</span></div>
+                </div>
+                <div class="hud-corner top-right">
+                  <div class="hud-label">Altitude</div>
+                  <div class="hud-value"><strong id="val-alt-big">0.0</strong><span class="hud-unit">m</span></div>
+                </div>
+                <div class="hud-corner bottom-center">
+                  <div class="hud-label">Heading</div>
+                  <div class="hud-value"><strong id="val-heading-big">0°</strong><span class="hud-unit" id="val-heading-cardinal">N</span></div>
+                </div>
               </div>
             </div>
-            <div class="sub-grid sub-grid-2">
-              <div class="sub-cell"><span class="sub-label">Consumed</span><strong class="sub-value" id="val-consumed">—</strong></div>
-              <div class="sub-cell"><span class="sub-label">Temp</span><strong class="sub-value" id="val-btemp">—</strong></div>
-              <div class="sub-cell"><span class="sub-label">Flight Left</span><strong class="sub-value" id="val-flight">—</strong></div>
-              <div class="sub-cell"><span class="sub-label">Health</span><strong class="sub-value" id="val-bhealth">—</strong></div>
-            </div>
-            <div class="cell-list" id="battery-cells">
-              <div class="cell-row"><span class="cell-label">Cell 1</span><span class="cell-value" data-cell="0">—</span></div>
-              <div class="cell-row"><span class="cell-label">Cell 2</span><span class="cell-value" data-cell="1">—</span></div>
-              <div class="cell-row"><span class="cell-label">Cell 3</span><span class="cell-value" data-cell="2">—</span></div>
-              <div class="cell-row"><span class="cell-label">Cell 4</span><span class="cell-value" data-cell="3">—</span></div>
+            <div class="att-readout">
+              <div><span>Roll</span><strong id="val-roll">0.0°</strong></div>
+              <div><span>Pitch</span><strong id="val-pitch">0.0°</strong></div>
+              <div><span>Yaw</span><strong id="val-yaw">0°</strong></div>
+              <div class="readout-divider"></div>
+              <div><span>R rate</span><strong id="val-rollrate">0°/s</strong></div>
+              <div><span>P rate</span><strong id="val-pitchrate">0°/s</strong></div>
+              <div><span>Y rate</span><strong id="val-yawrate">0°/s</strong></div>
+              <div class="readout-divider"></div>
+              <div><span>Altitude</span><strong id="val-alt-readout">0.00 m</strong></div>
+              <div><span>GroundSpeed</span><strong id="val-gspeed">0.00 m/s</strong></div>
+              <div><span>V Speed</span><strong id="val-vspeed">0.00 m/s</strong></div>
+              <div class="readout-divider"></div>
+              <div><span>Dist to WP</span><strong id="val-dwp">—</strong></div>
+              <div><span>Dist to MAV</span><strong id="val-dmav">—</strong></div>
+              <div><span>Heading</span><strong id="val-heading-readout">0°</strong></div>
             </div>
           </div>
         </section>
 
-        <!-- Radio -->
-        <section class="panel panel-radio">
-          <header class="panel-header">
-            <h2>Signal Intelligence</h2>
-            <span class="panel-tag" id="val-link">Link 0%</span>
-          </header>
-          <div class="panel-body">
-            <div class="sub-grid sub-grid-2">
-              <div class="sub-cell">
-                <span class="sub-label">RSSI</span>
-                <strong class="sub-value" id="val-rssi">—</strong>
-              </div>
-              <div class="sub-cell">
-                <span class="sub-label">Noise</span>
-                <strong class="sub-value" id="val-noise">—</strong>
-              </div>
-              <div class="sub-cell">
-                <span class="sub-label">RSSI (gnd)</span>
-                <strong class="sub-value" id="val-remrssi">—</strong>
-              </div>
-              <div class="sub-cell">
-                <span class="sub-label">Noise (gnd)</span>
-                <strong class="sub-value" id="val-remnoise">—</strong>
-              </div>
-            </div>
-            <div class="meter-row">
-              <div class="meter-row-head">
-                <span class="sub-label">Packet Loss</span>
-                <span class="meter-value" id="val-pktloss">0.0%</span>
-              </div>
-              <div class="bar-mini"><div class="bar-fill bar-cyan" id="pktloss-fill"></div></div>
-            </div>
-            <div class="sub-grid sub-grid-2">
-              <div class="sub-cell"><span class="sub-label">RX Errors</span><strong class="sub-value" id="val-rxerr">—</strong></div>
-              <div class="sub-cell"><span class="sub-label">Latency</span><strong class="sub-value" id="val-latency">—</strong></div>
-            </div>
-          </div>
-        </section>
-
-        <!-- IMU -->
         <section class="panel panel-imu">
           <header class="panel-header">
             <h2>Inertial Sensors</h2>
             <span class="panel-tag">X·Y·Z</span>
           </header>
-          <div class="panel-body">
-            <div class="sub-grid sub-grid-3 imu-summary">
-              <div class="sub-cell imu-priority">
+          <div class="panel-body imu-body">
+            <div class="imu-grid">
+              <div class="imu-cell imu-priority">
                 <span class="sub-label">Vibe</span>
-                <strong class="sub-value" id="val-vibe">—</strong>
+                <strong class="sub-value vibe-val" id="val-vibe">0.00 / 0.00 / 0.00</strong>
               </div>
-              <div class="sub-cell imu-priority">
+              <div class="imu-cell imu-priority">
                 <span class="sub-label">IMU T</span>
                 <strong class="sub-value" id="val-imu-temp">—</strong>
               </div>
-              <div class="sub-cell imu-priority">
+              <div class="imu-cell imu-priority">
                 <span class="sub-label">Pressure</span>
                 <strong class="sub-value" id="val-pressure">—</strong>
               </div>
+              <div class="imu-cell"><span class="sub-label">Accel X</span><strong class="sub-value" id="val-accel-x">0.00</strong></div>
+              <div class="imu-cell"><span class="sub-label">Accel Y</span><strong class="sub-value" id="val-accel-y">0.00</strong></div>
+              <div class="imu-cell"><span class="sub-label">Accel Z</span><strong class="sub-value" id="val-accel-z">0.00</strong></div>
+              <div class="imu-cell"><span class="sub-label">Gyro R</span><strong class="sub-value" id="val-gyro-r">0.00</strong></div>
+              <div class="imu-cell"><span class="sub-label">Gyro P</span><strong class="sub-value" id="val-gyro-p">0.00</strong></div>
+              <div class="imu-cell"><span class="sub-label">Gyro Y</span><strong class="sub-value" id="val-gyro-y">0.00</strong></div>
+              <div class="imu-cell"><span class="sub-label">Mag X</span><strong class="sub-value" id="val-mag-x">0.00</strong></div>
+              <div class="imu-cell"><span class="sub-label">Mag Y</span><strong class="sub-value" id="val-mag-y">0.00</strong></div>
+              <div class="imu-cell"><span class="sub-label">Mag Z</span><strong class="sub-value" id="val-mag-z">0.00</strong></div>
             </div>
-            <div class="sub-grid sub-grid-3">
-              <div class="sub-cell"><span class="sub-label">Accel X</span><strong class="sub-value" id="val-accel-x">—</strong></div>
-              <div class="sub-cell"><span class="sub-label">Accel Y</span><strong class="sub-value" id="val-accel-y">—</strong></div>
-              <div class="sub-cell"><span class="sub-label">Accel Z</span><strong class="sub-value" id="val-accel-z">—</strong></div>
-              <div class="sub-cell"><span class="sub-label">Gyro R</span><strong class="sub-value" id="val-gyro-r">—</strong></div>
-              <div class="sub-cell"><span class="sub-label">Gyro P</span><strong class="sub-value" id="val-gyro-p">—</strong></div>
-              <div class="sub-cell"><span class="sub-label">Gyro Y</span><strong class="sub-value" id="val-gyro-y">—</strong></div>
-              <div class="sub-cell"><span class="sub-label">Mag X</span><strong class="sub-value" id="val-mag-x">—</strong></div>
-              <div class="sub-cell"><span class="sub-label">Mag Y</span><strong class="sub-value" id="val-mag-y">—</strong></div>
-              <div class="sub-cell"><span class="sub-label">Mag Z</span><strong class="sub-value" id="val-mag-z">—</strong></div>
+          </div>
+        </section>
+      </div>
+
+      <!-- Column 2: Battery Analytics (top) + Mission Progress (bottom) -->
+      <div class="col col-mid">
+        <section class="panel panel-battery">
+          <header class="panel-header">
+            <h2>Battery Analytics</h2>
+            <span class="panel-tag">—</span>
+          </header>
+          <div class="panel-body battery-body">
+            <div class="battery-row">
+              <div class="battery-gauge-wrap">
+                <canvas id="battery-volt-gauge" class="battery-volt-gauge" aria-label="Voltage gauge"></canvas>
+                <div class="battery-volt-readout">
+                  <span class="sub-label">Voltage</span>
+                  <strong id="val-volt">—</strong>
+                </div>
+              </div>
+              <div class="battery-stats">
+                <div class="sub-cell"><span class="sub-label">Current</span><strong class="sub-value" id="val-curr">—</strong></div>
+                <div class="sub-cell"><span class="sub-label">Power</span><strong class="sub-value" id="val-power">—</strong></div>
+                <div class="sub-cell"><span class="sub-label">Consumed</span><strong class="sub-value" id="val-consumed">—</strong></div>
+                <div class="sub-cell"><span class="sub-label">Flight Left</span><strong class="sub-value" id="val-flight">—</strong></div>
+                <div class="sub-cell"><span class="sub-label">Temp</span><strong class="sub-value" id="val-btemp">—</strong></div>
+                <div class="sub-cell"><span class="sub-label">Health</span><strong class="sub-value" id="val-bhealth">—</strong></div>
+              </div>
+            </div>
+            <div class="cell-list cell-list-wide">
+              <div class="cell-row"><span class="cell-label">C1</span><span class="cell-value" data-cell="0">—</span></div>
+              <div class="cell-row"><span class="cell-label">C2</span><span class="cell-value" data-cell="1">—</span></div>
+              <div class="cell-row"><span class="cell-label">C3</span><span class="cell-value" data-cell="2">—</span></div>
+              <div class="cell-row"><span class="cell-label">C4</span><span class="cell-value" data-cell="3">—</span></div>
             </div>
           </div>
         </section>
 
-        <!-- Mission -->
         <section class="panel panel-mission">
           <header class="panel-header">
             <h2>Mission Progress</h2>
             <span class="panel-tag" id="val-mission-state">Idle</span>
           </header>
-          <div class="panel-body">
-            <div class="mission-row">
-              <div class="stat">
+          <div class="panel-body mission-body">
+            <div class="mission-grid">
+              <div class="mission-stat">
                 <span class="sub-label">Current WP</span>
-                <strong class="sub-value"><span id="val-cwp">—</span><span class="stat-sub">/<span id="val-twp">—</span></span></strong>
+                <strong class="sub-value"><span id="val-cwp">0</span><span class="stat-sub">/<span id="val-twp">0</span></span></strong>
               </div>
-              <div class="stat" style="text-align:right;">
+              <div class="mission-stat right">
                 <span class="sub-label">Distance</span>
-                <strong class="sub-value" id="val-dnext">—</strong>
+                <strong class="sub-value" id="val-dnext">0.0 m</strong>
               </div>
-            </div>
-            <div class="mission-row">
-              <div class="stat">
+              <div class="mission-stat">
                 <span class="sub-label">ETA Next</span>
                 <strong class="sub-value" id="val-eta-wp">—</strong>
               </div>
-              <div class="stat" style="text-align:right;">
+              <div class="mission-stat right">
                 <span class="sub-label">Total Time</span>
-                <strong class="sub-value" id="val-mission-time">00:00</strong>
+                <strong class="sub-value" id="val-mission-time">00:25</strong>
               </div>
             </div>
             <div class="bar-mini"><div class="bar-fill bar-success" id="mission-bar"></div></div>
-            <div class="status-foot mono" style="font-size:10px; text-align:right;">
-              Progress <strong id="val-progress" style="color:var(--text);">0%</strong>
+            <div class="mission-progress-foot">
+              Progress <strong id="val-progress">0%</strong>
             </div>
           </div>
         </section>
-      </aside>
+      </div>
+
+      <!-- Column 3: Flight Data Moving Map (full height) -->
+      <div class="col col-right">
+        <section class="panel panel-map">
+          <header class="panel-header mp-panel-header">
+            <h2>Flight Data — Moving Map</h2>
+            <div class="map-toolbar" role="toolbar" aria-label="Mission Planner map toolbar">
+              <button class="mp-tool-btn" id="map-capture-track" type="button" title="Start/stop recording track">● Track</button>
+              <button class="mp-tool-btn" id="map-load-track" type="button" title="Load KML or GPX track">Load</button>
+              <button class="mp-tool-btn" id="map-save-track" type="button" title="Save track as KML">Save</button>
+              <span class="mp-toolbar-sep" aria-hidden="true"></span>
+              <select id="map-tile-source" aria-label="Tile source">
+                <option value="satellite">SATELLITE</option>
+                <option value="osm">MAP</option>
+              </select>
+              <button class="map-btn" id="map-zoom-in" title="Zoom in">+</button>
+              <button class="map-btn" id="map-zoom-out" title="Zoom out">−</button>
+              <button class="map-btn" id="map-recenter" title="Center on vehicle">⌖</button>
+              <button class="mp-tool-btn is-active" id="map-orientation" type="button" title="Toggle North Up / Track Up">TRACK UP</button>
+              <button class="map-btn" id="map-quick-cache" title="Cache current viewport for offline use">⤓</button>
+              <button class="map-btn" id="map-download-offline" title="Download map area for offline use">⇩</button>
+            </div>
+          </header>
+          <div class="mp-layerbar" role="toolbar" aria-label="Map layers">
+            <span class="mp-layerbar-title">Overlays</span>
+            <button class="mp-layer-toggle is-active" data-map-layer="track" type="button">Track</button>
+            <button class="mp-layer-toggle is-active" data-map-layer="home" type="button">Home</button>
+            <button class="mp-layer-toggle is-active" data-map-layer="mission" type="button">Mission</button>
+            <button class="mp-layer-toggle" data-map-layer="wind" type="button">Wind</button>
+            <button class="mp-layer-toggle is-active" data-map-layer="adsb" type="button">ADSB</button>
+            <button class="mp-layer-toggle is-active" data-map-layer="geofence" type="button">Fence</button>
+            <button class="mp-layer-toggle" data-map-layer="ruler" type="button">Ruler</button>
+            <span class="mp-layer-status"><span id="map-orientation-label">Track Up</span> · Z<span id="map-zoom-label">16</span></span>
+          </div>
+          <div class="offline-panel" id="offline-panel" hidden>
+            <div class="offline-grid">
+              <label class="offline-field">
+                <span>Center lat</span>
+                <input type="number" id="offline-lat" step="0.0001" />
+              </label>
+              <label class="offline-field">
+                <span>Center lon</span>
+                <input type="number" id="offline-lon" step="0.0001" />
+              </label>
+              <div class="offline-shortcuts">
+                <button class="btn btn-ghost" id="offline-use-drone" type="button">Use drone</button>
+                <button class="btn btn-ghost" id="offline-use-map" type="button">Use map center</button>
+                <button class="btn btn-ghost" id="offline-download-world" type="button" title="Download all world map tiles for offline use">Download World Map</button>
+              </div>
+              <label class="offline-field offline-wide">
+                <span>Radius: <strong id="offline-radius-value">5</strong> km</span>
+                <input type="range" id="offline-radius" min="0.5" max="25" step="0.5" value="5" />
+              </label>
+              <label class="offline-field">
+                <span>Min zoom</span>
+                <input type="number" id="offline-min-zoom" min="0" max="19" value="10" />
+              </label>
+              <label class="offline-field">
+                <span>Max zoom</span>
+                <input type="number" id="offline-max-zoom" min="0" max="19" value="17" />
+              </label>
+              <label class="offline-field">
+                <span>Source</span>
+                <select id="offline-source">
+                  <option value="osm">Street (OSM)</option>
+                  <option value="satellite">Satellite (ArcGIS)</option>
+                </select>
+              </label>
+              <div class="offline-estimate offline-wide" id="offline-estimate">Estimate: enter values</div>
+              <div class="offline-actions offline-wide">
+                <button class="btn btn-primary" id="offline-start" type="button">Start</button>
+                <button class="btn btn-ghost" id="offline-cancel" type="button" disabled>Cancel</button>
+              </div>
+              <div class="offline-progress offline-wide" id="offline-progress" hidden>
+                <div class="bar-mini"><div class="bar-fill" id="offline-progress-fill"></div></div>
+                <div class="offline-progress-text" id="offline-progress-text">Idle</div>
+              </div>
+              <div class="offline-status offline-wide" id="offline-status" role="status"></div>
+            </div>
+          </div>
+          <div class="map-wrap mp-map-wrap">
+            <aside class="mp-tabs" aria-label="Mission Planner side tabs">
+              <button class="mp-tab is-active" data-mp-tab="layers" title="Layers" type="button">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6l9-3 9 3-9 3-9-3zm0 6l9 3 9-3M3 18l9 3 9-3"/></svg>
+              </button>
+              <button class="mp-tab" data-mp-tab="mission" title="Mission" type="button">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3v18h2v-7h7l3 7h2V3l-3 7H7V3H5z"/></svg>
+              </button>
+              <button class="mp-tab" data-mp-tab="wind" title="Wind" type="button">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8h11a3 3 0 1 0-3-3M3 16h15a3 3 0 1 1-3 3"/></svg>
+              </button>
+              <button class="mp-tab" data-mp-tab="track" title="Track" type="button">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17l6-6 4 4 8-9"/></svg>
+              </button>
+              <button class="mp-tab" data-mp-tab="camera" title="Camera" type="button">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h3l2-2h4l2 2h3v12H5z"/><circle cx="12" cy="13" r="3.5"/></svg>
+              </button>
+              <button class="mp-tab" data-mp-tab="settings" title="Settings" type="button">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.5-2-3.5-2.4.9a7 7 0 0 0-2-1.2L14 3h-4l-.5 2.5a7 7 0 0 0-2 1.2l-2.4-.9-2 3.5 2 1.5A7 7 0 0 0 5 12c0 .4 0 .8.1 1.2l-2 1.5 2 3.5 2.4-.9a7 7 0 0 0 2 1.2L10 21h4l.5-2.5a7 7 0 0 0 2-1.2l2.4.9 2-3.5-2-1.5c0-.4.1-.8.1-1.2z"/></svg>
+              </button>
+            </aside>
+
+            <div class="mp-canvas-area">
+              <canvas id="map" aria-label="Map"></canvas>
+
+              <div class="mp-hud-right" id="mp-hud" aria-label="Telemetry HUD">
+                <section class="mp-hud-block">
+                  <header>Vehicle</header>
+                  <div class="mp-hud-row"><span>Mode</span><strong id="hud-mode">UNKNOWN</strong></div>
+                  <div class="mp-hud-row"><span>Armed</span><strong id="hud-armed">DISARMED</strong></div>
+                  <div class="mp-hud-row"><span>Battery</span><strong id="hud-batt">—</strong></div>
+                  <div class="mp-hud-row"><span>Link</span><strong id="hud-link">0% · 0dBm</strong></div>
+                  <div class="mp-hud-row"><span>GPS</span><strong id="hud-gps">NO_GPS · 0s</strong></div>
+                </section>
+                <section class="mp-hud-block">
+                  <header>Position</header>
+                  <div class="mp-hud-row"><span>Lat</span><strong id="hud-lat">0.000000°</strong></div>
+                  <div class="mp-hud-row"><span>Lon</span><strong id="hud-lon">0.000000°</strong></div>
+                  <div class="mp-hud-row"><span>Alt (rel)</span><strong id="hud-alt">0.0 m</strong></div>
+                  <div class="mp-hud-row"><span>Alt (abs)</span><strong id="hud-alt-abs">0.0 m</strong></div>
+                  <div class="mp-hud-row"><span>Speed</span><strong id="hud-speed">0.0 m/s</strong></div>
+                  <div class="mp-hud-row"><span>Heading</span><strong id="hud-heading">0°</strong></div>
+                </section>
+                <section class="mp-hud-block" id="hud-cursor-block">
+                  <header>Cursor</header>
+                  <div class="mp-hud-row"><span>Lat</span><strong id="hud-cursor-lat">0.005309°</strong></div>
+                  <div class="mp-hud-row"><span>Lon</span><strong id="hud-cursor-lon">-0.005680°</strong></div>
+                  <div class="mp-hud-row"><span>From vehicle</span><strong id="hud-cursor-dist">864 m</strong></div>
+                  <div class="mp-hud-row"><span>Bearing</span><strong id="hud-cursor-bear">313°</strong></div>
+                </section>
+              </div>
+
+              <div class="mp-compass" id="mp-compass" aria-label="Compass rose">
+                <div class="mp-compass-rose" id="mp-compass-rose">
+                  <span class="mp-compass-n">N</span>
+                  <span class="mp-compass-e">E</span>
+                  <span class="mp-compass-s">S</span>
+                  <span class="mp-compass-w">W</span>
+                  <div class="mp-compass-hdg" id="mp-compass-hdg">0°</div>
+                </div>
+              </div>
+
+              <div class="mp-ruler-readout" id="mp-ruler-readout" hidden>
+                <span class="mp-ruler-label">Ruler</span>
+                <span id="mp-ruler-dist">—</span>
+                <span id="mp-ruler-bear">—</span>
+                <button id="mp-ruler-clear" type="button" title="Clear ruler">✕</button>
+              </div>
+
+              <div class="mp-ctxmenu" id="map-ctxmenu" hidden role="menu">
+                <button data-ctx-action="set-home" type="button" role="menuitem">Set Home Here</button>
+                <button data-ctx-action="center" type="button" role="menuitem">Center Map Here</button>
+                <button data-ctx-action="fly-to" type="button" role="menuitem">Fly To Here</button>
+                <button data-ctx-action="add-waypoint" type="button" role="menuitem">Add Waypoint</button>
+                <button data-ctx-action="ruler" type="button" role="menuitem">Measure From Here</button>
+                <button data-ctx-action="cancel" type="button" role="menuitem">Cancel</button>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
     </main>
 
     <footer class="footer">
-      <div id="diag">Idle</div>
+      <div id="diag">Packets: 0 · Last HB: 311ms · V: 0.00V · RSSI: 0 · ⚠ LINK LOST · Session: 00:25</div>
       <div class="footer-actions">
         <button class="btn btn-ghost" id="save-log">Save log</button>
-        <span class="env-info" id="env-info"></span>
+        <span class="env-info" id="env-info">Electron 32.3.3 · Node 20.18.1 · Chrome 128.0.6613.186</span>
       </div>
     </footer>
 

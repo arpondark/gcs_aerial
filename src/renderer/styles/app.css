@@ -1,8 +1,6 @@
 /* ------------------------------------------------------------------
-   AERO-GCS ALPHA — UIU Aerial Robotics
-   Reference: Kinetic Command design system
-   Layout: 60/40 split — Attitude+Map on left, 4 stacked sub-panels on right
-   Target: 1280×800 minimum, scales up to 1920×1080
+   AERO-GCS — UIU Aerial Robotics
+   3-column layout: Attitude+IMU | Battery+Mission | Map
    ------------------------------------------------------------------ */
 
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
@@ -63,6 +61,11 @@ button, select { font-family: inherit; }
 ::-webkit-scrollbar-track { background: var(--bg); }
 ::-webkit-scrollbar-thumb { background: var(--outline-variant); border-radius: 4px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--surface-container-highest); }
+
+body {
+  display: flex;
+  flex-direction: column;
+}
 
 /* ----------------------- Topbar ----------------------- */
 .topbar {
@@ -149,7 +152,6 @@ button, select { font-family: inherit; }
 }
 .btn-primary:not([disabled]):hover { filter: brightness(1.1); }
 
-/* ----------------------- Toggle button (Connect/Disconnect) ----------------------- */
 .btn-toggle[data-state="disconnected"] {
   background: rgba(255, 99, 99, 0.12);
   color: #ff6b6b;
@@ -269,21 +271,26 @@ button, select { font-family: inherit; }
 .status-card.datalink { border-left-color: var(--tertiary); }
 .status-card.datalink strong { color: var(--tertiary); }
 
-/* ----------------------- Main grid (60/40 split) ----------------------- */
+/* ----------------------- Main grid (3-column) ----------------------- */
 .grid {
   display: grid;
-  grid-template-columns: 6fr 4fr;
-  grid-template-rows: 1fr 1fr;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr) minmax(0, 1.3fr);
   gap: 12px;
   padding: 0 16px 12px 16px;
   flex: 1 1 auto;
   min-height: 0;
   overflow: hidden;
 }
-
-.panel-attitude { grid-column: 1; grid-row: 1; }
-.panel-map      { grid-column: 1; grid-row: 2; }
-.right-stack    { grid-column: 2; grid-row: 1 / span 2; min-height: 0; }
+.col {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  min-height: 0;
+}
+.col-left { grid-template-rows: 1.25fr 0.75fr; }
+.col-mid  { grid-template-rows: 1.15fr 0.85fr; }
+.col-right { grid-row: 1 / span 2; }
+.col-right .panel-map { height: 100%; }
 
 /* ----------------------- Panel chrome (two-tier header) ----------------------- */
 .panel {
@@ -306,6 +313,7 @@ button, select { font-family: inherit; }
   padding: 4px 12px;
   flex-shrink: 0;
   min-height: 22px;
+  gap: 8px;
 }
 .panel-header h2 {
   margin: 0;
@@ -315,6 +323,7 @@ button, select { font-family: inherit; }
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text);
+  white-space: nowrap;
 }
 .panel-tag {
   font-family: var(--font-mono);
@@ -326,6 +335,7 @@ button, select { font-family: inherit; }
   border: 0;
   font-weight: 500;
   letter-spacing: 0.04em;
+  white-space: nowrap;
 }
 .panel-body {
   padding: 10px 14px;
@@ -337,22 +347,14 @@ button, select { font-family: inherit; }
   overflow: auto;
 }
 
-/* ----------------------- Right column stack ----------------------- */
-.right-stack {
-  display: grid;
-  grid-template-rows: 1.15fr 0.9fr 1.1fr 0.75fr;
-  gap: 12px;
-  min-height: 0;
-}
-
 /* ----------------------- Attitude ----------------------- */
 .attitude-wrap {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(96px, 120px);
-  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) minmax(96px, 110px);
+  gap: 10px;
   flex: 1;
   min-height: 0;
-  padding: 10px 14px;
+  padding: 8px 12px;
 }
 .artificial-horizon {
   position: relative;
@@ -381,16 +383,16 @@ button, select { font-family: inherit; }
   position: absolute;
   background: rgba(0, 0, 0, 0.4);
   border: 1px solid rgba(255, 255, 255, 0.2);
-  padding: 6px 10px;
+  padding: 5px 9px;
   color: #ffffff;
   border-radius: var(--radius-xs);
 }
-.hud-corner.top-left { top: 12px; left: 12px; }
-.hud-corner.top-right { top: 12px; right: 12px; text-align: right; }
-.hud-corner.bottom-center { bottom: 12px; left: 50%; transform: translateX(-50%); text-align: center; }
+.hud-corner.top-left { top: 10px; left: 10px; }
+.hud-corner.top-right { top: 10px; right: 10px; text-align: right; }
+.hud-corner.bottom-center { bottom: 10px; left: 50%; transform: translateX(-50%); text-align: center; }
 .hud-label {
-  font-size: 10px;
-  color: rgba(255, 255, 255, 0.6);
+  font-size: 9px;
+  color: rgba(255, 255, 255, 0.65);
   text-transform: uppercase;
   letter-spacing: 0.06em;
   font-weight: 600;
@@ -423,7 +425,7 @@ button, select { font-family: inherit; }
   background: var(--surface-container-low);
   border: 1px solid var(--panel-border);
   border-radius: var(--radius);
-  padding: 6px 8px;
+  padding: 5px 8px;
   overflow: hidden;
   min-width: 0;
   max-height: 100%;
@@ -455,6 +457,225 @@ button, select { font-family: inherit; }
   margin: 1px 0;
 }
 
+/* ----------------------- Battery ----------------------- */
+.battery-body { padding: 12px 14px; }
+.battery-row {
+  display: grid;
+  grid-template-columns: 0.85fr 1.15fr;
+  gap: 14px;
+  align-items: stretch;
+  min-height: 0;
+}
+.battery-gauge-wrap {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-container-low);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius);
+  padding: 8px 6px 6px 6px;
+  min-height: 0;
+}
+.battery-volt-gauge {
+  width: 100%;
+  height: 130px;
+  display: block;
+}
+.battery-volt-readout {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  margin-top: 4px;
+}
+.battery-volt-readout strong {
+  font-family: var(--font-mono);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1;
+}
+.battery-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  align-content: stretch;
+  min-height: 0;
+}
+.battery-stats .sub-cell {
+  padding: 6px 8px;
+  gap: 2px;
+}
+.battery-stats .sub-cell .sub-value {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.cell-list-wide {
+  background: var(--surface-container-low);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius-xs);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  overflow: hidden;
+  flex-shrink: 0;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+}
+.cell-list-wide .cell-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 12px;
+  align-items: center;
+  border-right: 1px solid var(--panel-border);
+}
+.cell-list-wide .cell-row:last-child { border-right: 0; }
+.cell-list-wide .cell-row:nth-child(even) {
+  background: rgba(255, 255, 255, 0.03);
+}
+.cell-list-wide .cell-label {
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 10px;
+}
+.cell-list-wide .cell-value {
+  color: var(--tertiary);
+  font-weight: 600;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+/* ----------------------- Mission ----------------------- */
+.mission-body { padding: 12px 14px; justify-content: space-between; }
+.mission-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 16px;
+}
+.mission-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.mission-stat.right { text-align: right; align-items: flex-end; }
+.mission-stat .sub-value {
+  font-size: 18px;
+  font-weight: 600;
+  font-family: var(--font-mono);
+  color: var(--text);
+}
+.mission-stat .stat-sub {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-family: var(--font-mono);
+  font-weight: 400;
+}
+.mission-progress-foot {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  text-align: right;
+}
+.mission-progress-foot strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* ----------------------- IMU ----------------------- */
+.imu-body { padding: 10px 12px; }
+.imu-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+.imu-cell {
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-container-low);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius-xs);
+  padding: 5px 8px;
+  gap: 2px;
+  min-width: 0;
+}
+.imu-cell .sub-label {
+  font-size: 9px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 700;
+  font-family: var(--font-body);
+}
+.imu-cell .sub-value {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text);
+  font-weight: 500;
+  line-height: 1.2;
+}
+.imu-priority .sub-label { color: var(--secondary); }
+.imu-priority .sub-value {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--tertiary);
+}
+.vibe-val { color: var(--tertiary) !important; }
+
+/* ----------------------- Generic sub-cells ----------------------- */
+.sub-cell {
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-container-low);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius-xs);
+  padding: 5px 8px;
+  min-height: 0;
+  gap: 1px;
+}
+.sub-label {
+  font-size: 9px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 700;
+  font-family: var(--font-body);
+}
+.sub-value {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--text);
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+/* ----------------------- Mini progress bar ----------------------- */
+.bar-mini {
+  position: relative;
+  background: var(--surface-container-low);
+  border: 1px solid var(--panel-border);
+  border-radius: 2px;
+  height: 6px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.bar-fill {
+  position: absolute;
+  inset: 0;
+  width: 0%;
+  background: var(--tertiary);
+  transition: width 400ms ease, background 200ms ease;
+}
+.bar-fill.low { background: var(--secondary); }
+.bar-fill.crit { background: var(--error); }
+.bar-fill.bar-success { background: var(--success); }
+.bar-fill.bar-cyan { background: var(--tertiary); box-shadow: 0 0 6px rgba(0, 218, 243, 0.5); }
+.bar-fill.bar-orange { background: var(--secondary); box-shadow: 0 0 6px rgba(255, 183, 125, 0.5); }
+
 /* ----------------------- Mission Planner Map Theme ----------------------- */
 .mp-panel-header {
   background: linear-gradient(180deg, #2a2f36 0%, #1f242a 100%);
@@ -462,7 +683,6 @@ button, select { font-family: inherit; }
 }
 .mp-panel-header h2 { color: #e8edf2; }
 
-/* MP-style toolbar (flat chrome tabs) */
 .mp-toolbar-sep { width: 1px; height: 18px; background: var(--outline-variant); margin: 0 4px; }
 .mp-tool-btn {
   height: 22px;
@@ -487,7 +707,6 @@ button, select { font-family: inherit; }
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
 }
 
-/* Layer toggle bar */
 .mp-layerbar {
   display: flex;
   align-items: center;
@@ -534,7 +753,6 @@ button, select { font-family: inherit; }
   letter-spacing: 0.04em;
 }
 
-/* Map wrap with side tab strip */
 .mp-map-wrap {
   padding: 0;
   gap: 0;
@@ -595,7 +813,6 @@ button, select { font-family: inherit; }
 }
 #map:active { cursor: grabbing; }
 
-/* Right-side HUD (Mission Planner look) */
 .mp-hud-right {
   position: absolute;
   top: 10px;
@@ -637,7 +854,6 @@ button, select { font-family: inherit; }
 .mp-hud-row span { color: #8a94a3; font-size: 10px; }
 .mp-hud-row strong { color: #d8dde6; font-size: 11px; font-weight: 600; }
 
-/* Bottom-right compass rose */
 .mp-compass {
   position: absolute;
   right: 10px;
@@ -680,7 +896,6 @@ button, select { font-family: inherit; }
   color: #ffffff;
 }
 
-/* Ruler readout */
 .mp-ruler-readout {
   position: absolute;
   left: 50px;
@@ -709,7 +924,6 @@ button, select { font-family: inherit; }
 }
 .mp-ruler-readout button:hover { color: #ff6b6b; }
 
-/* Right-click context menu */
 .mp-ctxmenu {
   position: absolute;
   z-index: 6;
@@ -736,10 +950,8 @@ button, select { font-family: inherit; }
 }
 .mp-ctxmenu button:hover { background: #2f6fb5; color: #ffffff; }
 
-/* Cursor crosshair on map */
 #map.mp-cursor-cross { cursor: crosshair; }
 
-/* ----------------------- Map ----------------------- */
 .map-toolbar {
   display: flex;
   align-items: center;
@@ -841,188 +1053,7 @@ button, select { font-family: inherit; }
   flex: 1;
   min-height: 0;
   display: flex;
-  padding: 10px 14px;
-}
-.map-wrap:not(.mp-map-wrap) #map {
-  width: 100%;
-  height: 100%;
-  border-radius: var(--radius);
-  background: #0b1a2e;
-  border: 1px solid var(--panel-border);
-  display: block;
-  cursor: grab;
-}
-.map-wrap:not(.mp-map-wrap) #map:active { cursor: grabbing; }
-
-/* ----------------------- Sub-panel cells ----------------------- */
-.sub-grid {
-  display: grid;
-  gap: 6px;
-  flex-shrink: 0;
-}
-.sub-grid-2 { grid-template-columns: 1fr 1fr; }
-.sub-grid-3 { grid-template-columns: repeat(3, 1fr); }
-.sub-grid-3 .sub-cell { padding: 4px 6px; }
-.sub-grid-3 .sub-cell .sub-value { font-size: 12px; }
-
-/* IMU priority row — Vibe / IMU T / Pressure at the top, slightly larger */
-.imu-summary { margin-bottom: 4px; }
-.imu-summary .imu-priority .sub-value {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--tertiary);
-}
-.imu-summary .imu-priority .sub-label {
-  color: var(--secondary);
-}
-
-.sub-cell {
-  display: flex;
-  flex-direction: column;
-  background: var(--surface-container-low);
-  border: 1px solid var(--panel-border);
-  border-radius: var(--radius-xs);
-  padding: 5px 8px;
-  min-height: 0;
-  gap: 1px;
-}
-.sub-label {
-  font-size: 9px;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  font-weight: 700;
-  font-family: var(--font-body);
-}
-.sub-value {
-  font-family: var(--font-mono);
-  font-size: 13px;
-  color: var(--text);
-  font-weight: 500;
-  line-height: 1.2;
-}
-.sub-mini {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  color: var(--text-muted);
-}
-
-/* ----------------------- Mini progress bar ----------------------- */
-.bar-mini {
-  position: relative;
-  background: var(--surface-container-low);
-  border: 1px solid var(--panel-border);
-  border-radius: 2px;
-  height: 6px;
-  overflow: hidden;
-  flex-shrink: 0;
-}
-.bar-fill {
-  position: absolute;
-  inset: 0;
-  width: 0%;
-  background: var(--tertiary);
-  transition: width 400ms ease, background 200ms ease;
-}
-.bar-fill.low { background: var(--secondary); }
-.bar-fill.crit { background: var(--error); }
-.bar-fill.bar-success { background: var(--success); }
-.bar-fill.bar-cyan { background: var(--tertiary); box-shadow: 0 0 6px rgba(0, 218, 243, 0.5); }
-.bar-fill.bar-orange { background: var(--secondary); box-shadow: 0 0 6px rgba(255, 183, 125, 0.5); }
-
-/* ----------------------- Battery row (top stats + cells) ----------------------- */
-.battery-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  flex-shrink: 0;
-}
-.battery-stat {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.battery-stat .sub-value {
-  font-size: 18px;
-  font-weight: 600;
-}
-
-/* ----------------------- Cell list (zebra) ----------------------- */
-.cell-list {
-  display: flex;
-  flex-direction: column;
-  background: var(--surface-container-low);
-  border: 1px solid var(--panel-border);
-  border-radius: var(--radius-xs);
-  font-family: var(--font-mono);
-  font-size: 12px;
-  overflow: hidden;
-  flex-shrink: 0;
-}
-.cell-list .cell-row {
-  display: flex;
-  justify-content: space-between;
-  padding: 4px 10px;
-  align-items: center;
-}
-.cell-list .cell-row:nth-child(even) {
-  background: rgba(255, 255, 255, 0.03);
-}
-.cell-list .cell-label {
-  color: var(--text-muted);
-  letter-spacing: 0.04em;
-  font-weight: 600;
-  text-transform: uppercase;
-  font-size: 10px;
-}
-.cell-list .cell-value {
-  color: var(--tertiary);
-  font-weight: 600;
-  font-family: var(--font-mono);
-}
-.cell-list .cell-row.missing .cell-value {
-  color: var(--text-dim);
-}
-
-/* ----------------------- Meter row ----------------------- */
-.meter-row {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  flex-shrink: 0;
-}
-.meter-row-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-}
-.meter-value {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--success);
-}
-
-/* ----------------------- Mission ----------------------- */
-.mission-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  flex-shrink: 0;
-}
-.stat {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-.stat .sub-value {
-  font-size: 16px;
-  font-weight: 600;
-}
-.stat .stat-sub {
-  color: var(--text-muted);
-  font-size: 11px;
-  font-family: var(--font-mono);
+  padding: 0;
 }
 
 /* ----------------------- Footer ----------------------- */
@@ -1041,27 +1072,15 @@ button, select { font-family: inherit; }
 }
 .footer-actions { display: flex; align-items: center; gap: 10px; }
 
-/* ----------------------- Body wrapper ----------------------- */
-body {
-  display: flex;
-  flex-direction: column;
-}
-
 /* ----------------------- Responsive ----------------------- */
 @media (max-width: 1280px) {
   body { font-size: 12px; }
   .grid { gap: 10px; padding: 0 12px 10px 12px; }
   .status-strip { gap: 10px; padding: 10px 12px; }
-  .right-stack { grid-template-rows: 1.1fr 0.85fr 1.05fr 0.7fr; }
 }
 @media (max-width: 1024px) {
-  .grid { grid-template-columns: 1fr; grid-template-rows: auto auto auto; }
-  .panel-attitude { grid-row: 1; }
-  .panel-map { grid-row: 2; min-height: 320px; }
-  .right-stack {
-    grid-column: 1; grid-row: 3;
-    grid-template-rows: repeat(4, auto);
-  }
+  .grid { grid-template-columns: 1fr; }
+  .col-left, .col-mid, .col-right { grid-template-rows: auto; grid-row: auto; }
   .topbar { flex-wrap: wrap; height: auto; padding: 8px 12px; gap: 8px; }
 }
 @media (max-width: 800px) {
@@ -1069,8 +1088,6 @@ body {
   body { display: block; }
   .topbar { flex-direction: column; align-items: stretch; }
   .connection { flex-wrap: wrap; }
-  .grid { height: auto; }
-  .right-stack { grid-template-rows: repeat(4, auto); }
 }
 
 @media (prefers-reduced-motion: reduce) {
