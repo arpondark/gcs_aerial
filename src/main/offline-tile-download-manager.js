@@ -294,18 +294,27 @@ class OfflineTileDownloadManager extends EventEmitter {
   }
 
   _summary(job) {
+    const elapsedSec = ((job.finishedAt || Date.now()) - job.startedAt) / 1000;
+    const speedTiles = elapsedSec > 0 ? (job.processedTiles / elapsedSec).toFixed(1) : '0.0';
+    const speedMb = elapsedSec > 0 ? (job.downloadedBytes / (1024 * 1024) / elapsedSec).toFixed(2) : '0.00';
+    const diskMb = (job.writtenBytes / (1024 * 1024)).toFixed(2);
+    const remaining = Math.max(0, job.totalTiles - job.processedTiles);
     return {
       jobId: job.jobId,
       state: job.state,
       source: job.source,
       totalTiles: job.totalTiles,
       processedTiles: job.processedTiles,
+      remainingTiles: remaining,
       cachedHits: job.cachedHits,
       downloadedTiles: job.downloadedTiles,
       failedTiles: job.failedTiles,
       skippedTiles: job.skippedTiles,
       downloadedBytes: job.downloadedBytes,
       writtenBytes: job.writtenBytes,
+      speedTilesPerSec: speedTiles,
+      speedMbPerSec: speedMb,
+      diskUsageMb: diskMb,
       percent: job.totalTiles > 0 ? (job.processedTiles / job.totalTiles) * 100 : 0,
       elapsedMs: job.finishedAt ? job.finishedAt - job.startedAt : Date.now() - job.startedAt,
       etaMs: this._computeEta(job),

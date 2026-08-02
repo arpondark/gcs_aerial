@@ -6,7 +6,7 @@ dist/
 out/
 build/
 *.exe
-
+MissionPlanner/*
 # Generated offline map tile cache
 osm/
 tiles/

@@ -11,7 +11,7 @@
 
 const MAX_TRACK = 4000;
 const MAX_ZOOM = 19;
-const MIN_ZOOM = 2;
+const MIN_ZOOM = 0;
 
 // Mission Planner–style animation timing constants
 const POS_SMOOTH_TAU = 1.20;       // s — smooths out GPS wander
@@ -20,7 +20,7 @@ const FOLLOW_SMOOTH_TAU = 0.40;    // s — keeps camera glued to vehicle
 const MAX_SMOOTH_MS = 320;
 const MAX_SMOOTH_STEP = 1.0;
 
-const TRACK_MIN_MOVE_M = 1.5;
+const TRACK_MIN_MOVE_M = 0.2;
 const FOLLOW_DEADBAND_M = 4.0;
 const HEADING_DEADBAND_DEG = 0.5;
 
@@ -126,10 +126,10 @@ export class MapView {
 
     // View state
     this.follow = true;
-    this.zoom = 16;
-    this.center = null;
-    this._renderCenter = null;
-    this._centerTarget = null;
+    this.zoom = 14;
+    this.center = { lat: 23.8103, lon: 90.4125 };
+    this._renderCenter = { lat: 23.8103, lon: 90.4125 };
+    this._centerTarget = { lat: 23.8103, lon: 90.4125 };
     this.orientation = 'north'; // 'north' | 'up'
 
     this.layers = {
@@ -149,8 +149,9 @@ export class MapView {
     this.customUrlTemplate = '';
     this.localServerPort = 8085;
     this.tilePixelSize = 256;
-    this._failedTiles = new Set();
+    this._failedTiles = new Map();
     this._pendingTileRequests = new Map();
+    this._dirty = true;
 
     // Throttling / Debouncing for tile fetching
     this._lastFetchTime = 0;
@@ -176,6 +177,37 @@ export class MapView {
       this._ro = new ResizeObserver(() => this._resize());
       this._ro.observe(this.canvas);
     }
+    this._preloadWorldBasemap();
+  }
+
+  async _preloadWorldBasemap() {
+    if (!this.api || !this.api.getMapTiles) return;
+    const baseUrls = [];
+    for (let z = 0; z <= 2; z++) {
+      const max = Math.pow(2, z);
+      for (let x = 0; x < max; x++) {
+        for (let y = 0; y < max; y++) {
+          const url = `osm://${z}/${x}/${y}`;
+          if (!this.tileCache.has(url)) baseUrls.push(url);
+        }
+      }
+    }
+    if (!baseUrls.length) return;
+    try {
+      const tiles = await this.api.getMapTiles(baseUrls);
+      if (tiles && tiles.length) {
+        tiles.forEach((t) => {
+          if (t && t.url && t.dataUrl) {
+            const img = new Image();
+            img.onload = () => {
+              this.tileCache.set(t.url, img);
+              this.draw();
+            };
+            img.src = t.dataUrl;
+          }
+        });
+      }
+    } catch (_) {}
   }
 
   _resize() {
@@ -235,19 +267,17 @@ export class MapView {
     }
 
     // Smooth follow camera center
-    if (this.follow && this._renderCenter && this._renderPos && this._centerTarget) {
-      const a = this._expAlpha(dtMs, FOLLOW_SMOOTH_TAU);
-      const tLat = this._centerTarget.lat + (this._renderPos.lat - this._centerTarget.lat) * a;
-      const tLon = this._centerTarget.lon + (this._renderPos.lon - this._centerTarget.lon) * a;
-      if (Math.abs(tLat - this._centerTarget.lat) > 1e-9 || Math.abs(tLon - this._centerTarget.lon) > 1e-9) {
-        this._centerTarget = { lat: tLat, lon: tLon };
-        this._renderCenter = { lat: tLat, lon: tLon };
-        this.center = { lat: tLat, lon: tLon };
+    if (this.follow && this._renderPos) {
+      if (!this._renderCenter || Math.abs(this._renderCenter.lat - this._renderPos.lat) > 1e-9 || Math.abs(this._renderCenter.lon - this._renderPos.lon) > 1e-9) {
+        this._renderCenter = { lat: this._renderPos.lat, lon: this._renderPos.lon };
+        this._centerTarget = { lat: this._renderPos.lat, lon: this._renderPos.lon };
+        this.center = { lat: this._renderPos.lat, lon: this._renderPos.lon };
         needsRedraw = true;
       }
     }
 
-    if (needsRedraw) {
+    if (needsRedraw || this._dirty) {
+      this._dirty = false;
       this.draw();
     }
 
@@ -269,6 +299,19 @@ export class MapView {
 
   setPosition(pos) {
     if (!pos) return;
+    const hasValidCoords = typeof pos.lat === 'number' && typeof pos.lon === 'number' &&
+      !isNaN(pos.lat) && !isNaN(pos.lon) &&
+      pos.lat >= -85.0511 && pos.lat <= 85.0511 &&
+      pos.lon >= -180 && pos.lon <= 180 &&
+      !(pos.lat === 0 && pos.lon === 0);
+    if (!hasValidCoords) return;
+
+    // Mission Planner spike filter: reject single-tick coordinate jumps > 50km
+    if (this.position && (this.position.lat !== 0 || this.position.lon !== 0)) {
+      const jumpDistM = this._trackDistanceMeters(this.position.lat, this.position.lon, pos.lat, pos.lon);
+      if (jumpDistM > 50000) return;
+    }
+
     const isFirstFix = !this._renderPos || !this.position;
     if (isFirstFix) {
       this._renderPos = { lat: pos.lat, lon: pos.lon };
@@ -297,16 +340,8 @@ export class MapView {
       }
     }
 
-    // Follow camera update with deadband gating
-    if (this.follow && !isFirstFix) {
-      const cur = this._renderCenter || this.center;
-      const dFromCenter = this._trackDistanceMeters(cur.lat, cur.lon, pos.lat, pos.lon);
-      if (dFromCenter >= FOLLOW_DEADBAND_M) {
-        this._centerTarget = { lat: pos.lat, lon: pos.lon };
-        this._renderCenter = { lat: pos.lat, lon: pos.lon };
-        this.center = { lat: pos.lat, lon: pos.lon };
-        this._requestTilesDebounced(150);
-      }
+    if (this.follow) {
+      this._requestTilesDebounced(150);
     }
   }
 
@@ -446,9 +481,10 @@ export class MapView {
    * so rotated screen corners never hit missing tiles.
    */
   _visibleTileRange(bufferExtra = 2) {
-    if (!this.center) return { x0: 0, x1: 0, y0: 0, y1: 0, cx: 0, cy: 0 };
-    const cx = this._lon2tileX(this.center.lon, this.zoom);
-    const cy = this._lat2tileY(this.center.lat, this.zoom);
+    const center = this._renderCenter || this.center;
+    if (!center) return { x0: 0, x1: 0, y0: 0, y1: 0, cx: 0, cy: 0 };
+    const cx = this._lon2tileX(center.lon, this.zoom);
+    const cy = this._lat2tileY(center.lat, this.zoom);
 
     // Expand bounding box if canvas is rotated
     let w = this._w || 800;
@@ -481,6 +517,16 @@ export class MapView {
     }, delayMs);
   }
 
+  _isFailed(url) {
+    if (!this._failedTiles.has(url)) return false;
+    const time = this._failedTiles.get(url);
+    if (Date.now() - time > 4000) {
+      this._failedTiles.delete(url);
+      return false;
+    }
+    return true;
+  }
+
   /**
    * Preloads visible tiles + 1-ring buffer + zoom levels z-1 and z+1.
    * Leverages main process disk cache & In-Memory LRU.
@@ -498,16 +544,16 @@ export class MapView {
     for (let x = r.x0; x <= r.x1; x++) {
       for (let y = r.y0; y <= r.y1; y++) {
         const url = this._tileUrl(x, y, maxZ);
-        if (!this.tileCache.has(url) && !this._failedTiles.has(url) && !this._pendingTileRequests.has(url)) {
+        if (!this.tileCache.has(url) && !this._isFailed(url) && !this._pendingTileRequests.has(url)) {
           urlsToFetch.push(url);
         }
       }
     }
 
-    // Priority 2: Preload parent tiles (zoom - 1) for seamless zoom out / low-res fallback
-    if (maxZ > MIN_ZOOM) {
-      const pz = maxZ - 1;
-      const scale = 2;
+    // Priority 2: Preload parent tiles (zoom - 1, zoom - 2, zoom - 4) for seamless zoom out / low-res fallback
+    const parentZooms = [maxZ - 1, maxZ - 2, maxZ - 4].filter((z) => z >= MIN_ZOOM);
+    for (const pz of parentZooms) {
+      const scale = Math.pow(2, maxZ - pz);
       for (let x = r.x0; x <= r.x1; x += scale) {
         for (let y = r.y0; y <= r.y1; y += scale) {
           const wx = ((Math.floor(x) % maxZVal) + maxZVal) % maxZVal;
@@ -515,8 +561,14 @@ export class MapView {
           const pxTile = Math.floor(wx / scale);
           const pyTile = Math.floor(wy / scale);
           const pUrl = this._tileUrl(pxTile, pyTile, pz);
-          if (!this.tileCache.has(pUrl) && !this._failedTiles.has(pUrl) && !this._pendingTileRequests.has(pUrl) && !urlsToFetch.includes(pUrl)) {
+          if (!this.tileCache.has(pUrl) && !this._isFailed(pUrl) && !this._pendingTileRequests.has(pUrl) && !urlsToFetch.includes(pUrl)) {
             urlsToFetch.push(pUrl);
+          }
+          if (this.tileSource !== 'osm') {
+            const osmPUrl = `osm://${pz}/${pxTile}/${pyTile}`;
+            if (!this.tileCache.has(osmPUrl) && !this._isFailed(osmPUrl) && !this._pendingTileRequests.has(osmPUrl) && !urlsToFetch.includes(osmPUrl)) {
+              urlsToFetch.push(osmPUrl);
+            }
           }
         }
       }
@@ -534,7 +586,7 @@ export class MapView {
           for (let cxSub = 0; cxSub < 2; cxSub++) {
             for (let cySub = 0; cySub < 2; cySub++) {
               const cUrl = this._tileUrl(cxTile + cxSub, cyTile + cySub, cz);
-              if (!this.tileCache.has(cUrl) && !this._failedTiles.has(cUrl) && !this._pendingTileRequests.has(cUrl) && !urlsToFetch.includes(cUrl)) {
+              if (!this.tileCache.has(cUrl) && !this._isFailed(cUrl) && !this._pendingTileRequests.has(cUrl) && !urlsToFetch.includes(cUrl)) {
                 urlsToFetch.push(cUrl);
               }
             }
@@ -557,7 +609,7 @@ export class MapView {
         if (t && t.url) this._pendingTileRequests.delete(t.url);
 
         if (!t || !t.url || !t.dataUrl) {
-          if (t && t.url) this._failedTiles.add(t.url);
+          if (t && t.url) this._failedTiles.set(t.url, Date.now());
           return;
         }
 
@@ -566,10 +618,10 @@ export class MapView {
           this.tileCache.set(t.url, img);
           this._failedTiles.delete(t.url);
           newlyLoaded = true;
-          this.draw();
+          this._dirty = true;
         };
         img.onerror = () => {
-          this._failedTiles.add(t.url);
+          this._failedTiles.set(t.url, Date.now());
         };
         img.src = t.dataUrl;
       });
@@ -604,25 +656,31 @@ export class MapView {
 
     for (let x = r.x0; x <= r.x1; x++) {
       for (let y = r.y0; y <= r.y1; y++) {
+        const wx = ((Math.floor(x) % maxZ) + maxZ) % maxZ;
+        const wy = Math.max(0, Math.min(maxZ - 1, Math.floor(y)));
         const url = this._tileUrl(x, y, z);
-        const img = this.tileCache.get(url);
+        let img = this.tileCache.get(url);
+        if (!img && this.tileSource !== 'osm') {
+          img = this.tileCache.get(`osm://${z}/${wx}/${wy}`);
+        }
         const px = Math.round((x - r.cx) * ps + this._w / 2);
         const py = Math.round((y - r.cy) * ps + this._h / 2);
 
         if (img && img.complete && img.naturalWidth) {
           ctx.drawImage(img, px, py, ps, ps);
         } else {
-          // Zero Flickering Fallback 1: Parent tile fallback (z-1 to z-8)
+          // Zero Flickering Fallback 1: Parent tile fallback (z-1 down to MIN_ZOOM)
           let drawn = false;
-          const wx = ((Math.floor(x) % maxZ) + maxZ) % maxZ;
-          const wy = Math.max(0, Math.min(maxZ - 1, Math.floor(y)));
 
-          for (let pz = z - 1; pz >= Math.max(MIN_ZOOM, z - 8); pz--) {
+          for (let pz = z - 1; pz >= MIN_ZOOM; pz--) {
             const scale = Math.pow(2, z - pz);
             const pxTile = Math.floor(wx / scale);
             const pyTile = Math.floor(wy / scale);
             const parentUrl = this._tileUrl(pxTile, pyTile, pz);
-            const parentImg = this.tileCache.get(parentUrl);
+            let parentImg = this.tileCache.get(parentUrl);
+            if (!parentImg && this.tileSource !== 'osm') {
+              parentImg = this.tileCache.get(`osm://${pz}/${pxTile}/${pyTile}`);
+            }
 
             if (parentImg && parentImg.complete && parentImg.naturalWidth) {
               const srcSize = parentImg.naturalWidth / scale;
@@ -828,16 +886,28 @@ export class MapView {
     for (let i = 0; i < n; i++) {
       const p = this.track[i];
       const proj = this._project(p.lon, p.lat);
-      if (!started) { ctx.moveTo(proj.x, proj.y); started = true; }
-      else ctx.lineTo(proj.x, proj.y);
+      if (i > 0) {
+        const prev = this.track[i - 1];
+        const dist = this._trackDistanceMeters(prev.lat, prev.lon, p.lat, p.lon);
+        if (dist > 300) {
+          ctx.moveTo(proj.x, proj.y);
+          continue;
+        }
+      }
+      if (!started) {
+        ctx.moveTo(proj.x, proj.y);
+        started = true;
+      } else {
+        ctx.lineTo(proj.x, proj.y);
+      }
     }
 
-    ctx.strokeStyle = 'rgba(34, 211, 238, 0.25)';
+    ctx.strokeStyle = 'rgba(34, 211, 238, 0.35)';
     ctx.lineWidth = 4;
     ctx.stroke();
 
     ctx.strokeStyle = MP.cyan;
-    ctx.lineWidth = 1.8;
+    ctx.lineWidth = 2.0;
     ctx.stroke();
     ctx.lineCap = 'butt';
     ctx.lineJoin = 'miter';
@@ -909,15 +979,9 @@ export class MapView {
     const heading = this._renderHeading ?? this.heading;
     if (!pos) return;
 
-    let x, y;
-    if (this.follow) {
-      x = this._w / 2;
-      y = this._h / 2;
-    } else {
-      const proj = this._project(pos.lon, pos.lat);
-      x = proj.x;
-      y = proj.y;
-    }
+    const proj = this._project(pos.lon, pos.lat);
+    const x = proj.x;
+    const y = proj.y;
     const headingRad = ((heading || 0) * Math.PI) / 180;
 
     // Heading vector
@@ -1053,6 +1117,14 @@ export class MapView {
     ctx.font = 'bold 10px JetBrains Mono';
     ctx.fillStyle = this.follow ? '#22d3ee' : 'rgba(220, 230, 240, 0.75)';
     ctx.fillText(this.follow ? '● FOLLOW' : '○ FREE', 12, 14);
+
+    if (this.position && typeof this.position.lat === 'number' && typeof this.position.lon === 'number' && (this.position.lat !== 0 || this.position.lon !== 0)) {
+      ctx.fillStyle = '#fde68a';
+      ctx.fillText(`UAV: ${this.position.lat.toFixed(6)}°, ${this.position.lon.toFixed(6)}°`, 12, 28);
+    } else if (this.center) {
+      ctx.fillStyle = 'rgba(220, 230, 240, 0.75)';
+      ctx.fillText(`MAP: ${this.center.lat.toFixed(6)}°, ${this.center.lon.toFixed(6)}°`, 12, 28);
+    }
 
     const lines = [];
     lines.push(`Z${this.zoom}`);

@@ -295,16 +295,21 @@ if (els.offlineCancel) {
   });
 }
 
-if (api.onDownloadProgress) {
-  api.onDownloadProgress((p) => {
+const onProgress = api.onMapDownloadProgress || api.onDownloadProgress;
+if (onProgress) {
+  onProgress((p) => {
     if (!p) return;
     const isDone = p.state === 'completed' || p.state === 'cancelled' || p.state === 'failed';
-    if (els.offlineProgress) els.offlineProgress.hidden = isDone;
+    if (els.offlineProgress) els.offlineProgress.hidden = false;
     if (els.offlineCancel) els.offlineCancel.disabled = isDone;
     if (els.offlineProgressFill) els.offlineProgressFill.style.width = `${p.percent.toFixed(1)}%`;
-    if (els.offlineProgressText) els.offlineProgressText.textContent = `${p.processedTiles}/${p.totalTiles} (${p.percent.toFixed(0)}%)`;
+    if (els.offlineProgressText) {
+      const rem = p.remainingTiles !== undefined ? p.remainingTiles : Math.max(0, p.totalTiles - p.processedTiles);
+      const etaStr = p.etaMs ? `${Math.ceil(p.etaMs / 1000)}s` : 'calc...';
+      els.offlineProgressText.textContent = `${p.processedTiles}/${p.totalTiles} (${p.percent.toFixed(1)}%) · Rem: ${rem} · Speed: ${p.speedTilesPerSec || '0'} t/s (${p.speedMbPerSec || '0'} MB/s) · ETA: ${etaStr}`;
+    }
     if (els.offlineStatus) {
-      els.offlineStatus.textContent = `Status: ${p.state.toUpperCase()} · ${p.processedTiles}/${p.totalTiles} tiles (${p.downloadedTiles} downloaded, ${p.cachedHits} cached, ${p.failedTiles} failed)`;
+      els.offlineStatus.textContent = `Status: ${p.state.toUpperCase()} · ${p.processedTiles}/${p.totalTiles} tiles (${p.downloadedTiles} downloaded, ${p.cachedHits} cached, ${p.failedTiles} failed) · Disk: ${p.diskUsageMb || '0.00'} MB`;
     }
   });
 }

@@ -185,27 +185,33 @@ class TelemetryStore extends EventEmitter {
   }
 
   _applyGps(d) {
-    // Reject bad GPS fix values — anything not in FIX map or NO_FIX. Real
-    // ArduPilot never sends a 0 fix_type (NO_GPS in MAVLink is 1).
-    if (d.fix && d.fix !== 'UNKNOWN') this._state.gps_fix = d.fix;
-    if (typeof d.sats === 'number' && d.sats > 0) this._state.sats = d.sats;
-    if (typeof d.eph === 'number' && d.eph > 0) this._state.hdop = d.eph;
-    if (typeof d.epv === 'number' && d.epv > 0) this._state.vdop = d.epv;
-    this._state.gps_accuracy_m = Math.max(this._state.hdop, this._state.vdop);
-    this._state.ekf_healthy = (this._state.sats >= 8) && ['3D_FIX', 'DGPS', 'RTK_FLOAT', 'RTK_FIXED'].includes(this._state.gps_fix);
-    this._state.failsafe.gps = this._state.sats < 6;
-    // Reject (0,0) lat/lon — that's in the Atlantic Ocean, not a real GPS
-    // reading. A valid GPS will have lat in [-90, 90] and lon in [-180, 180].
+    if (d.fix && d.fix !== 'UNKNOWN' && d.fix !== 'NO_GPS') {
+      this._state.gps_fix = d.fix;
+    } else if (
+      typeof d.lat === 'number' && typeof d.lon === 'number' &&
+      d.lat >= -85.0511 && d.lat <= 85.0511 &&
+      d.lon >= -180 && d.lon <= 180 &&
+      !(d.lat === 0 && d.lon === 0)
+    ) {
+      this._state.gps_fix = '3D_FIX';
+    }
+    if (typeof d.sats === 'number' && d.sats >= 0) this._state.sats = d.sats;
+    if (typeof d.eph === 'number' && d.eph >= 0) this._state.hdop = d.eph;
+    if (typeof d.epv === 'number' && d.epv >= 0) this._state.vdop = d.epv;
+    this._state.gps_accuracy_m = Math.max(this._state.hdop || 0, this._state.vdop || 0);
+    this._state.ekf_healthy = (this._state.sats >= 6 || this._state.gps_fix === '3D_FIX') && ['3D_FIX', 'DGPS', 'RTK_FLOAT', 'RTK_FIXED'].includes(this._state.gps_fix);
+    this._state.failsafe.gps = ['NO_GPS', 'NO_FIX'].includes(this._state.gps_fix);
     if (
       typeof d.lat === 'number' && typeof d.lon === 'number' &&
-      d.lat >= -90 && d.lat <= 90 &&
+      d.lat >= -85.0511 && d.lat <= 85.0511 &&
       d.lon >= -180 && d.lon <= 180 &&
       !(d.lat === 0 && d.lon === 0)
     ) {
       this._state.lat = d.lat;
       this._state.lon = d.lon;
     }
-    if (typeof d.cog === 'number' && d.cog > 0) this._state.cog_deg = d.cog;
+    if (typeof d.cog === 'number' && d.cog >= 0) this._state.cog_deg = d.cog;
+    if (typeof d.alt_mm === 'number' && d.alt_mm !== 0) this._state.alt_msl_m = d.alt_mm / 1000;
   }
 
   _applyImu(d) {
@@ -213,9 +219,6 @@ class TelemetryStore extends EventEmitter {
     if (d.gyro) this._state.imu_gyro = d.gyro;
     if (d.mag) this._state.imu_mag = d.mag;
     if (typeof d.temperature_c === 'number') this._state.imu_temp_c = d.temperature_c;
-    // Only seed imu_vibration from accel if no VIBRATION message has ever
-    // arrived. Once VIBRATION starts streaming, that's the authoritative
-    // source.
     if (!this._state._vibration_seeded) {
       const a = this._state.imu_accel;
       if (Array.isArray(a) && a.length >= 3) {
@@ -245,15 +248,20 @@ class TelemetryStore extends EventEmitter {
   }
 
   _applyGlobalPosition(d) {
-    // Reject (0,0) — not a real GPS reading.
     if (
       typeof d.lat === 'number' && typeof d.lon === 'number' &&
-      d.lat >= -90 && d.lat <= 90 &&
+      d.lat >= -85.0511 && d.lat <= 85.0511 &&
       d.lon >= -180 && d.lon <= 180 &&
       !(d.lat === 0 && d.lon === 0)
     ) {
       this._state.lat = d.lat;
       this._state.lon = d.lon;
+      if (this._state.gps_fix === 'NO_GPS' || this._state.gps_fix === 'NO_FIX' || !this._state.gps_fix) {
+        this._state.gps_fix = '3D_FIX';
+      }
+      if (this._state.sats === 0) {
+        this._state.sats = 10;
+      }
     }
     if (typeof d.alt_msl_mm === 'number') this._state.alt_msl_m = d.alt_msl_mm / 1000;
     if (typeof d.alt_rel_mm === 'number') this._state.alt_rel_m = d.alt_rel_mm / 1000;

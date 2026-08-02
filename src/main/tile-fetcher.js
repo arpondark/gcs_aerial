@@ -93,7 +93,16 @@ class TileCache {
   }
 
   static defaultRoot(app) {
-    return path.join(app.getPath('userData'), 'tiles', 'v1');
+    const platform = process.platform;
+    let baseDir = '';
+    if (platform === 'win32') {
+      baseDir = process.env.LOCALAPPDATA || (app ? app.getPath('userData') : '');
+    } else if (platform === 'darwin') {
+      baseDir = path.join(process.env.HOME || (app ? app.getPath('home') : ''), 'Library', 'Application Support');
+    } else {
+      baseDir = path.join(process.env.HOME || (app ? app.getPath('home') : ''), '.local', 'share');
+    }
+    return path.join(baseDir, 'MyGCS', 'MapCache');
   }
 
   keyPath(sourceId, z, x, y) {
@@ -107,13 +116,17 @@ class TileCache {
   _getSearchPaths(sourceId, z, x, y) {
     const relTile = path.join(sourceId, String(z), String(x), `${y}.tile`);
     const relJson = path.join(sourceId, String(z), String(x), `${y}.json`);
-
-    // Standard PNG/JPG direct paths for offline tile bundles
     const relPng = path.join(sourceId, String(z), String(x), `${y}.png`);
     const relJpg = path.join(sourceId, String(z), String(x), `${y}.jpg`);
 
+    const directTile = path.join(String(z), String(x), `${y}.tile`);
+    const directJson = path.join(String(z), String(x), `${y}.json`);
+    const directPng = path.join(String(z), String(x), `${y}.png`);
+    const directJpg = path.join(String(z), String(x), `${y}.jpg`);
+
     const list = [
-      { tile: path.join(this.root, relTile), json: path.join(this.root, relJson) }
+      { tile: path.join(this.root, relTile), json: path.join(this.root, relJson) },
+      { tile: path.join(this.root, directTile), json: path.join(this.root, directJson) }
     ];
 
     const projectRoot = process.env.AEROGCS_PROJECT_ROOT || path.resolve(__dirname, '..', '..');
@@ -125,16 +138,12 @@ class TileCache {
     ];
 
     for (const fRoot of fallbackRoots) {
-      const tPath = path.join(fRoot, relTile);
-      const jPath = path.join(fRoot, relJson);
-      const pngPath = path.join(fRoot, relPng);
-      const jpgPath = path.join(fRoot, relJpg);
-
-      if (tPath !== list[0].tile) {
-        list.push({ tile: tPath, json: jPath });
-      }
-      list.push({ tile: pngPath, json: null, defaultType: 'image/png' });
-      list.push({ tile: jpgPath, json: null, defaultType: 'image/jpeg' });
+      list.push({ tile: path.join(fRoot, relTile), json: path.join(fRoot, relJson) });
+      list.push({ tile: path.join(fRoot, directTile), json: path.join(fRoot, directJson) });
+      list.push({ tile: path.join(fRoot, relPng), json: null, defaultType: 'image/png' });
+      list.push({ tile: path.join(fRoot, directPng), json: null, defaultType: 'image/png' });
+      list.push({ tile: path.join(fRoot, relJpg), json: null, defaultType: 'image/jpeg' });
+      list.push({ tile: path.join(fRoot, directJpg), json: null, defaultType: 'image/jpeg' });
     }
     return list;
   }
@@ -421,6 +430,20 @@ class TileFetcher {
         contentType: cached.contentType,
         byteLength: cached.buf.length,
       };
+    }
+
+    if (sourceId !== 'osm') {
+      const osmCached = await this.cache.read('osm', z, x, y);
+      if (osmCached) {
+        return {
+          url: template,
+          dataUrl: `data:${osmCached.contentType};base64,${osmCached.buf.toString('base64')}`,
+          error: null,
+          cacheStatus: 'disk-fallback',
+          contentType: osmCached.contentType,
+          byteLength: osmCached.buf.length,
+        };
+      }
     }
 
     if (this.localTileServer) {

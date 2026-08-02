@@ -64,10 +64,12 @@ function createWindow() {
     return { action: 'deny' };
   });
 
-  // forward decoded telemetry to renderer
   telemetry.on('update', (snapshot) => {
     if (!win.isDestroyed()) {
       win.webContents.send('telemetry:update', snapshot);
+    }
+    if (snapshot && typeof snapshot.lat === 'number' && typeof snapshot.lon === 'number') {
+      checkAutoAreaDownload(snapshot.lat, snapshot.lon);
     }
   });
 
@@ -127,6 +129,49 @@ async function init() {
   registerTrackLogIpc();
   await app.whenReady();
   await localTileServer.start().catch((err) => console.error('[main] Local tile server failed to start:', err));
+
+  // Automatically trigger background map download for world basemap (zoom 0-6) on startup
+  setTimeout(() => {
+    autoDownloadWorldMap();
+  }, 2500);
+}
+
+let _lastAutoDownloadLat = 0;
+let _lastAutoDownloadLon = 0;
+
+async function autoDownloadWorldMap() {
+  try {
+    if (!offlineDownload.isBusy()) {
+      console.log('[main] Starting automatic background world map download (Zoom 0-6)...');
+      await offlineDownload.start({
+        mode: 'world',
+        source: 'osm',
+        minZoom: 0,
+        maxZoom: 6,
+      });
+    }
+  } catch (err) {
+    console.error('[main] Auto world map download error:', err.message);
+  }
+}
+
+function checkAutoAreaDownload(lat, lon) {
+  if (!lat || !lon || (lat === 0 && lon === 0)) return;
+  const dist = Math.hypot(lat - _lastAutoDownloadLat, lon - _lastAutoDownloadLon) * 111; // km approx
+  if (dist < 3) return; // Only trigger if moved > 3km
+  if (offlineDownload.isBusy()) return;
+
+  _lastAutoDownloadLat = lat;
+  _lastAutoDownloadLon = lon;
+
+  console.log(`[main] Auto-pre-downloading surrounding map region for [${lat.toFixed(4)}, ${lon.toFixed(4)}]...`);
+  offlineDownload.start({
+    center: { lat, lon },
+    radiusKm: 8,
+    minZoom: 7,
+    maxZoom: 16,
+    source: 'osm',
+  }).catch(() => {});
 }
 
 // ---------- IPC handlers ----------
