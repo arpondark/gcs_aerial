@@ -587,7 +587,7 @@ body {
 }
 
 /* ----------------------- IMU ----------------------- */
-.imu-body { padding: 10px 12px; }
+.imu-body { padding: 10px 12px; overflow: hidden; }
 .imu-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
