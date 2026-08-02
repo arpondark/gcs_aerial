@@ -15,6 +15,10 @@ contextBridge.exposeInMainWorld('aerogcs', {
   downloadMapArea: (payload) => ipcRenderer.invoke('map:downloadArea', payload),
   cancelMapDownload: (jobId) => ipcRenderer.invoke('map:cancelDownload', jobId),
   getMapDownloadStatus: () => ipcRenderer.invoke('map:downloadStatus'),
+  setMapDatabasePath: (filePath) => ipcRenderer.invoke('map:setDatabasePath', filePath),
+  getMapDatabaseInfo: () => ipcRenderer.invoke('map:getDatabaseInfo'),
+  getTileServerStatus: () => ipcRenderer.invoke('map:getTileServerStatus'),
+  selectMapDatabaseFile: () => ipcRenderer.invoke('map:selectDatabaseFile'),
   onMapDownloadProgress: (cb) => {
     const handler = (_evt, payload) => cb(payload);
     ipcRenderer.on('map:downloadProgress', handler);

@@ -8,19 +8,10 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 
 /**
- * Slippy map tile fetcher with a persistent disk cache.
- *
- * URL templates from the renderer:
- *   osm://{z}/{x}/{y}            → OpenStreetMap standard tiles
- *   arcgis://sat/{z}/{y}/{x}    → ArcGIS World Imagery (satellite)
- *
- * Tile responses are written to disk at:
- *   <cacheRoot>/<sourceId>/<z>/<x>/<y>.tile
- * with a sibling <y>.json sidecar holding {contentType, downloadedAt, byteLength}.
- * The renderer still receives base64 data URLs so no other layer needs to change.
- *
- * Resolution order:
- *   in-flight dedup → disk cache → HTTPS → atomic disk write → return
+ * Slippy map tile fetcher with multi-tier caching:
+ *   1. Main-process In-Memory LRU Cache (super-fast 0ms disk bypass)
+ *   2. Persistent Disk Cache (<userData>/tiles/v1, project root /tiles, /osm)
+ *   3. HTTPS tile fetch with circuit breaker & concurrency pool
  */
 
 const TEMPLATES = {
@@ -42,10 +33,6 @@ const TEMPLATES = {
   },
 };
 
-// Custom user-supplied tile URL. The renderer writes
-// `custom://<full URL with {z} {x} {y} placeholders>` and we expand it here.
-// Custom sources get a per-URL cache bucket so different providers don't
-// collide on disk.
 function parseCustomTemplate(template) {
   if (typeof template !== 'string') return null;
   if (!template.startsWith('custom://')) return null;
@@ -53,8 +40,8 @@ function parseCustomTemplate(template) {
   if (!/^https?:\/\//i.test(url)) return null;
   return url;
 }
+
 function customSourceId(url) {
-  // Short, filesystem-safe identifier from the host + a hash of the URL.
   let host = 'custom';
   try { host = new URL(url).host; } catch (_) {}
   const hash = crypto.createHash('sha1').update(url).digest('hex').slice(0, 8);
@@ -64,14 +51,45 @@ function customSourceId(url) {
 const SOURCES = Object.keys(TEMPLATES);
 const MIN_ZOOM = 0;
 const MAX_ZOOM = 19;
-const NETWORK_CONCURRENCY = 8;
-const HTTPS_TIMEOUT_MS = 6000;
-const CIRCUIT_FAILURE_THRESHOLD = 2;
-const CIRCUIT_COOLDOWN_MS = 20000;
+const NETWORK_CONCURRENCY = 12;
+const HTTPS_TIMEOUT_MS = 5000;
+const CIRCUIT_FAILURE_THRESHOLD = 3;
+const CIRCUIT_COOLDOWN_MS = 15000;
+const MEM_CACHE_CAPACITY = 2000; // In-memory tile limit in main process
+
+class MemoryLRUCache {
+  constructor(limit = MEM_CACHE_CAPACITY) {
+    this.limit = limit;
+    this.cache = new Map();
+  }
+
+  get(key) {
+    if (!this.cache.has(key)) return null;
+    const val = this.cache.get(key);
+    this.cache.delete(key);
+    this.cache.set(key, val);
+    return val;
+  }
+
+  set(key, val) {
+    if (this.cache.has(key)) {
+      this.cache.delete(key);
+    } else if (this.cache.size >= this.limit) {
+      const oldestKey = this.cache.keys().next().value;
+      this.cache.delete(oldestKey);
+    }
+    this.cache.set(key, val);
+  }
+
+  clear() {
+    this.cache.clear();
+  }
+}
 
 class TileCache {
   constructor(root) {
     this.root = root;
+    this.memCache = new MemoryLRUCache(MEM_CACHE_CAPACITY);
   }
 
   static defaultRoot(app) {
@@ -90,6 +108,10 @@ class TileCache {
     const relTile = path.join(sourceId, String(z), String(x), `${y}.tile`);
     const relJson = path.join(sourceId, String(z), String(x), `${y}.json`);
 
+    // Standard PNG/JPG direct paths for offline tile bundles
+    const relPng = path.join(sourceId, String(z), String(x), `${y}.png`);
+    const relJpg = path.join(sourceId, String(z), String(x), `${y}.jpg`);
+
     const list = [
       { tile: path.join(this.root, relTile), json: path.join(this.root, relJson) }
     ];
@@ -98,55 +120,61 @@ class TileCache {
     const fallbackRoots = [
       projectRoot,
       path.join(projectRoot, 'tiles', 'v1'),
-      path.join(projectRoot, 'tiles')
+      path.join(projectRoot, 'tiles'),
+      path.join(projectRoot, 'osm')
     ];
 
     for (const fRoot of fallbackRoots) {
       const tPath = path.join(fRoot, relTile);
       const jPath = path.join(fRoot, relJson);
+      const pngPath = path.join(fRoot, relPng);
+      const jpgPath = path.join(fRoot, relJpg);
+
       if (tPath !== list[0].tile) {
         list.push({ tile: tPath, json: jPath });
       }
+      list.push({ tile: pngPath, json: null, defaultType: 'image/png' });
+      list.push({ tile: jpgPath, json: null, defaultType: 'image/jpeg' });
     }
     return list;
   }
 
   async read(sourceId, z, x, y) {
+    const memKey = `${sourceId}/${z}/${x}/${y}`;
+    const memItem = this.memCache.get(memKey);
+    if (memItem) return memItem;
+
     const candidates = this._getSearchPaths(sourceId, z, x, y);
-    for (const { tile: kPath, json: mPath } of candidates) {
+    for (const { tile: kPath, json: mPath, defaultType } of candidates) {
       try {
         const buf = await fsp.readFile(kPath);
         if (!buf || buf.length === 0) continue;
 
-        let contentType = 'image/png';
+        let contentType = defaultType || 'image/png';
         let downloadedAt = Date.now();
-        try {
-          const metaRaw = await fsp.readFile(mPath, 'utf8');
-          const meta = JSON.parse(metaRaw);
-          if (meta && typeof meta.contentType === 'string' && meta.contentType.startsWith('image/')) {
-            contentType = meta.contentType;
-            if (meta.downloadedAt) downloadedAt = meta.downloadedAt;
-          }
-        } catch (_) {
-          // Sidecar json might be omitted in offline bundles; default to image/png
+        if (mPath) {
+          try {
+            const metaRaw = await fsp.readFile(mPath, 'utf8');
+            const meta = JSON.parse(metaRaw);
+            if (meta && typeof meta.contentType === 'string' && meta.contentType.startsWith('image/')) {
+              contentType = meta.contentType;
+              if (meta.downloadedAt) downloadedAt = meta.downloadedAt;
+            }
+          } catch (_) {}
         }
 
-        return { buf, contentType, downloadedAt };
-      } catch (_) {
-        // Try next candidate
-      }
+        const res = { buf, contentType, downloadedAt };
+        this.memCache.set(memKey, res);
+        return res;
+      } catch (_) {}
     }
     return null;
   }
 
-  async _invalidate(sourceId, z, x, y) {
-    await Promise.all([
-      fsp.unlink(this.keyPath(sourceId, z, x, y)).catch(() => {}),
-      fsp.unlink(this.metaPath(sourceId, z, x, y)).catch(() => {}),
-    ]);
-  }
-
   async write(sourceId, z, x, y, buf, contentType) {
+    const memKey = `${sourceId}/${z}/${x}/${y}`;
+    this.memCache.set(memKey, { buf, contentType, downloadedAt: Date.now() });
+
     const dir = path.join(this.root, sourceId, String(z), String(x));
     await fsp.mkdir(dir, { recursive: true });
     const tmpKey = `${y}.tile.tmp-${process.pid}-${crypto.randomBytes(4).toString('hex')}`;
@@ -168,13 +196,9 @@ class TileCache {
 function parseTileRequest(template) {
   if (typeof template !== 'string') return null;
 
-  // Custom templates: custom://<full URL with placeholders>
   const customUrl = parseCustomTemplate(template);
   if (customUrl != null) {
-    const m = customUrl.match(/\{z\}[^{]*\{x\}[^{]*\{y\}|\{y\}[^{]*\{x\}[^{]*\{z\}/i);
-    if (!m) return null;
-    // We don't actually need the placeholder match — the renderer pre-fills them.
-    const z = 0, x = 0, y = 0; // unused; the fetcher reads them from the URL itself
+    const z = 0, x = 0, y = 0;
     return { sourceId: customSourceId(customUrl), z, x, y, template, customUrl };
   }
 
@@ -200,7 +224,7 @@ function parseTileRequest(template) {
 }
 
 function isValidCoord(sourceId, z, x, y) {
-  if (!SOURCES.includes(sourceId)) return false;
+  if (!SOURCES.includes(sourceId) && !sourceId.startsWith('custom-')) return false;
   if (!Number.isInteger(z) || z < MIN_ZOOM || z > MAX_ZOOM) return false;
   if (!Number.isInteger(x) || x < 0) return false;
   if (!Number.isInteger(y) || y < 0) return false;
@@ -212,8 +236,8 @@ class CircuitBreaker {
   constructor(failureThreshold = CIRCUIT_FAILURE_THRESHOLD, cooldownMs = CIRCUIT_COOLDOWN_MS) {
     this.failureThreshold = failureThreshold;
     this.cooldownMs = cooldownMs;
-    this.consecutive = new Map(); // sourceId -> count
-    this.openUntil = new Map(); // sourceId -> ms timestamp
+    this.consecutive = new Map();
+    this.openUntil = new Map();
   }
 
   isOpen(sourceId) {
@@ -338,7 +362,7 @@ class TileFetcher {
     this.cache = new TileCache(cacheRoot);
     this.pool = new ConcurrencyPool(NETWORK_CONCURRENCY);
     this.breaker = new CircuitBreaker();
-    this.inflight = new Map(); // key -> Promise
+    this.inflight = new Map();
   }
 
   static keyOf(sourceId, z, x, y) {
@@ -351,12 +375,9 @@ class TileFetcher {
       return { url: template, dataUrl: null, error: 'unknown tile template', cacheStatus: 'invalid' };
     }
     const { sourceId, z, x, y, customUrl } = parsed;
-    // Custom sources pre-resolve their own URL/coords.
     let resolvedUrl = template;
     let resolvedZ = z, resolvedX = x, resolvedY = y;
     if (customUrl) {
-      // The renderer already substituted placeholders when forming the
-      // `custom://<url>` string. Pull them back out for caching/validation.
       try {
         const u = new URL(customUrl);
         const maybeZ = parseInt(u.pathname.match(/\/(\d+)\//)?.[1] || '0', 10);
@@ -365,7 +386,7 @@ class TileFetcher {
         if ([maybeZ, maybeX, maybeY].every(Number.isInteger) && maybeZ >= MIN_ZOOM && maybeZ <= MAX_ZOOM) {
           resolvedZ = maybeZ; resolvedX = maybeX; resolvedY = maybeY;
         }
-      } catch (_) { /* leave defaults */ }
+      } catch (_) {}
       resolvedUrl = customUrl;
     }
     if (!isValidCoord(sourceId, resolvedZ, resolvedX, resolvedY)) {
@@ -377,9 +398,7 @@ class TileFetcher {
     if (this.inflight.has(key)) {
       try {
         return await this.inflight.get(key);
-      } catch (err) {
-        // fall through to fresh attempt below
-      }
+      } catch (err) {}
     }
 
     const promise = this._resolve(sourceId, resolvedZ, resolvedX, resolvedY, resolvedUrl, signal, !!customUrl);
@@ -392,7 +411,6 @@ class TileFetcher {
   }
 
   async _resolve(sourceId, z, x, y, template, signal, isCustom = false) {
-    // 1. Disk cache
     const cached = await this.cache.read(sourceId, z, x, y);
     if (cached) {
       return {
@@ -405,7 +423,22 @@ class TileFetcher {
       };
     }
 
-    // 2. Circuit breaker
+    if (this.localTileServer) {
+      try {
+        const localTile = await this.localTileServer.getTileBuffer(z, x, y);
+        if (localTile && localTile.buf) {
+          return {
+            url: template,
+            dataUrl: `data:${localTile.contentType};base64,${localTile.buf.toString('base64')}`,
+            error: null,
+            cacheStatus: 'local-server',
+            contentType: localTile.contentType,
+            byteLength: localTile.buf.length,
+          };
+        }
+      } catch (_) {}
+    }
+
     if (this.breaker.isOpen(sourceId)) {
       return {
         url: template,
@@ -415,7 +448,6 @@ class TileFetcher {
       };
     }
 
-    // 3. Network
     let remoteUrl;
     if (isCustom) {
       remoteUrl = template;
@@ -448,7 +480,6 @@ class TileFetcher {
       };
     }
 
-    // 4. Validate content-type
     const ct = (fetchResult.contentType || '').toLowerCase();
     if (!ct.startsWith('image/')) {
       this.breaker.recordSuccess(sourceId);
@@ -460,11 +491,10 @@ class TileFetcher {
       };
     }
 
-    // 5. Persist (don't fail the request if cache write fails)
     try {
       await this.cache.write(sourceId, z, x, y, fetchResult.buf, fetchResult.contentType);
     } catch (err) {
-      console.warn(`[tile-cache] write failed for ${key}: ${err.message}`);
+      console.warn(`[tile-cache] write failed: ${err.message}`);
     }
     this.breaker.recordSuccess(sourceId);
 
@@ -506,7 +536,6 @@ class TileFetcher {
   }
 }
 
-// Kept for backwards-compatibility with any external callers.
 async function fetchTiles(templates) {
   const fetcher = sharedFetcher || (sharedFetcher = new TileFetcher(process.env.AEROGCS_TILE_CACHE || ''));
   return fetcher.fetchTiles(templates);

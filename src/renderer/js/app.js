@@ -392,7 +392,7 @@ els.mapCtxMenu.querySelectorAll('button').forEach((btn) => {
       if (lastSnapshot) lastSnapshot.home = mapView.home;
     } else if (action === 'center') {
       const c = mapView.getContextMenuCoords();
-      if (c) { mapView.setCenter(c.lat, c.lon); mapView.draw(); }
+      if (c) { mapView.setCenter(c.lat, c.lon); }
     } else if (action === 'add-waypoint') {
       const wp = mapView.addWaypointAtCursor();
       if (wp) _missionWaypoints = [..._missionWaypoints, wp];
@@ -724,12 +724,47 @@ els.saveLogBtn.addEventListener('click', async () => {
   }
 });
 
+// --------------------------- Offline Map Database Management ---------------------------
+
+const selectDbBtn = document.getElementById('map-select-db-btn');
+const dbPathDisplay = document.getElementById('offline-db-path-display');
+
+async function updateTileServerStatus() {
+  try {
+    if (api && api.getTileServerStatus) {
+      const status = await api.getTileServerStatus();
+      if (status) {
+        if (dbPathDisplay) {
+          const dbName = status.databasePath ? status.databasePath.replace(/\\/g, '/').split('/').pop() : 'Default (osm/)';
+          dbPathDisplay.textContent = `${status.sourceType.toUpperCase()}: ${dbName}`;
+          dbPathDisplay.title = status.databasePath || 'osm/';
+        }
+        if (mapView && status.port) {
+          mapView.setLocalServerPort(status.port);
+        }
+      }
+    }
+  } catch (_) {}
+}
+
+if (selectDbBtn) {
+  selectDbBtn.addEventListener('click', async () => {
+    if (api && api.selectMapDatabaseFile) {
+      const res = await api.selectMapDatabaseFile();
+      if (!res.canceled && res.filePath) {
+        await updateTileServerStatus();
+      }
+    }
+  });
+}
+
 // --------------------------- Boot ---------------------------
 
 (async function boot() {
   await refreshPorts();
   const info = await api.info();
   setText('env-info', `Electron ${info.electron} · Node ${info.node} · Chrome ${info.chrome}${info.mock ? ' · mock' : ''}`);
+  await updateTileServerStatus();
   try {
     const opts = Array.from(els.portSelect.options).map((o) => `${o.value}|${o.textContent}`);
     console.log('[AERO-GCS ALPHA] ports:', JSON.stringify(opts));

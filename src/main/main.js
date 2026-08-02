@@ -11,6 +11,7 @@ const MockLink = require('./mock-link');
 const { TileFetcher, TileCache } = require('./tile-fetcher');
 const { OfflineTileDownloadManager } = require('./offline-tile-download-manager');
 const { registerTrackLogIpc } = require('./track-log');
+const LocalTileServer = require('./local-tile-server');
 
 const isMock = process.argv.includes('--mock');
 const isDev = process.argv.includes('--enable-logging');
@@ -22,6 +23,11 @@ const mavlink = new MAVLink({ onMessage: (msg) => telemetry.apply(msg) });
 
 const tileCacheRoot = TileCache.defaultRoot(app);
 const tileFetcher = new TileFetcher(tileCacheRoot);
+const localTileServer = new LocalTileServer({
+  tileCacheDir: tileCacheRoot,
+  fallbackDirs: [path.join(process.cwd(), 'osm')],
+});
+tileFetcher.localTileServer = localTileServer;
 const offlineDownload = new OfflineTileDownloadManager(tileFetcher);
 
 offlineDownload.on('progress', (payload) => {
@@ -120,6 +126,7 @@ async function init() {
   mainWindow = createWindow();
   registerTrackLogIpc();
   await app.whenReady();
+  await localTileServer.start().catch((err) => console.error('[main] Local tile server failed to start:', err));
 }
 
 // ---------- IPC handlers ----------
@@ -235,6 +242,53 @@ ipcMain.handle('map:downloadStatus', async () => {
   }
 });
 
+ipcMain.handle('map:setDatabasePath', async (_evt, filePath) => {
+  try {
+    const ok = localTileServer.loadDatabase(filePath);
+    return { ok, databasePath: localTileServer.activeDatabasePath, metadata: localTileServer.getMetadata() };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('map:getDatabaseInfo', async () => {
+  return {
+    databasePath: localTileServer.activeDatabasePath,
+    sourceType: localTileServer.getSourceType(),
+    metadata: localTileServer.getMetadata(),
+  };
+});
+
+ipcMain.handle('map:getTileServerStatus', async () => {
+  return {
+    running: localTileServer.isRunning,
+    port: localTileServer.port,
+    host: localTileServer.host,
+    url: `http://${localTileServer.host}:${localTileServer.port}`,
+    databasePath: localTileServer.activeDatabasePath,
+    sourceType: localTileServer.getSourceType(),
+    metadata: localTileServer.getMetadata(),
+  };
+});
+
+ipcMain.handle('map:selectDatabaseFile', async () => {
+  if (!mainWindow || mainWindow.isDestroyed()) return { canceled: true };
+  const res = await dialog.showOpenDialog(mainWindow, {
+    title: 'Select Offline World Map Database (.mbtiles, .pmtiles, or tile folder)',
+    properties: ['openFile', 'openDirectory'],
+    filters: [
+      { name: 'Map Databases', extensions: ['mbtiles', 'pmtiles'] },
+      { name: 'All Files', extensions: ['*'] },
+    ],
+  });
+  if (res.canceled || !res.filePaths || !res.filePaths.length) {
+    return { canceled: true };
+  }
+  const filePath = res.filePaths[0];
+  const ok = localTileServer.loadDatabase(filePath);
+  return { canceled: false, filePath, ok, metadata: localTileServer.getMetadata() };
+});
+
 // Log to file
 ipcMain.handle('log:save', async (_evt, name, payload) => {
   try {
@@ -257,6 +311,9 @@ ipcMain.handle('app:info', async () => ({
   chrome: process.versions.chrome,
   userData: app.getPath('userData'),
   mock: isMock,
+  tileServerPort: localTileServer.port,
+  tileServerSource: localTileServer.getSourceType(),
+  tileServerDb: localTileServer.activeDatabasePath,
 }));
 
 app.whenReady().then(init).catch((err) => {

@@ -247,6 +247,13 @@
           </div>
           <div class="offline-panel" id="offline-panel" hidden>
             <div class="offline-grid">
+              <div class="offline-field offline-wide" style="display: flex; gap: 8px; align-items: center; background: rgba(15,23,42,0.6); padding: 8px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.1);">
+                <div style="flex: 1; min-width: 0;">
+                  <div style="font-size: 11px; text-transform: uppercase; color: #94a3b8; letter-spacing: 0.5px; font-weight: 600;">Offline World Map Database</div>
+                  <div id="offline-db-path-display" style="font-size: 12px; color: #38bdf8; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">Auto-Detected (osm/)</div>
+                </div>
+                <button class="btn btn-secondary" id="map-select-db-btn" type="button" style="white-space: nowrap; font-size: 11px; padding: 4px 10px;">Change DB</button>
+              </div>
               <label class="offline-field">
                 <span>Center lat</span>
                 <input type="number" id="offline-lat" step="0.0001" />
