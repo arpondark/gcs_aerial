@@ -1,6 +1,6 @@
 /* ------------------------------------------------------------------
    AERO-GCS — UIU Aerial Robotics
-   3-column layout: Attitude+IMU | Battery+Mission | Map
+   3-column layout: Attitude+IMU (left) | Battery+Mission (mid) | Map (right)
    ------------------------------------------------------------------ */
 
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
@@ -274,7 +274,7 @@ body {
 /* ----------------------- Main grid (3-column) ----------------------- */
 .grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr) minmax(0, 1.3fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0.75fr) minmax(0, 1.55fr);
   gap: 12px;
   padding: 0 16px 12px 16px;
   flex: 1 1 auto;
@@ -287,10 +287,10 @@ body {
   min-width: 0;
   min-height: 0;
 }
-.col-left { grid-template-rows: 1.25fr 0.75fr; }
-.col-mid  { grid-template-rows: 1.15fr 0.85fr; }
-.col-right { grid-row: 1 / span 2; }
-.col-right .panel-map { height: 100%; }
+.col-left { grid-column: 1; grid-template-rows: 1.15fr 0.85fr; }
+.col-mid-panels { grid-column: 2; grid-template-rows: 1.25fr 0.75fr; }
+.col-right-map { grid-column: 3; grid-row: 1 / span 2; }
+.col-right-map .panel-map { height: 100%; }
 
 /* ----------------------- Panel chrome (two-tier header) ----------------------- */
 .panel {
@@ -710,6 +710,7 @@ body {
 .mp-layerbar {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 6px;
   padding: 4px 14px;
   background: #1b1f25;
@@ -955,6 +956,7 @@ body {
 .map-toolbar {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 4px;
 }
 .map-toolbar select {
@@ -1080,7 +1082,7 @@ body {
 }
 @media (max-width: 1024px) {
   .grid { grid-template-columns: 1fr; }
-  .col-left, .col-mid, .col-right { grid-template-rows: auto; grid-row: auto; }
+  .col-left, .col-mid-panels, .col-right-map { grid-template-rows: auto; grid-row: auto; }
   .topbar { flex-wrap: wrap; height: auto; padding: 8px 12px; gap: 8px; }
 }
 @media (max-width: 800px) {
